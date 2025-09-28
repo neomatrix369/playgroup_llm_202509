@@ -50,6 +50,7 @@ class BatchExperimentRunner:
         self.all_llm_responses: List[Any] = []
         self.global_start_time: float = 0
         self.global_end_time: float = 0
+        self.experiment_timestamp: str = ""  # Will be set when experiment starts
 
     def parse_arguments(self) -> argparse.Namespace:
         """Parse command line arguments with comprehensive options."""
@@ -176,7 +177,7 @@ Examples:
     def log_timestamp(self, message: str) -> None:
         """Log message with timestamp."""
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        print(f"[{timestamp}] {message}")
+        print(f"🕒 [{timestamp}] {message}")
 
     def format_duration(self, seconds: float) -> str:
         """Format duration in human-readable format."""
@@ -255,20 +256,57 @@ Examples:
         template: str,
         problem: str,
         rr_trains: List[Any],
-        iterations: int
+        iterations: int,
+        verbose: bool = False
     ) -> Dict[str, Any]:
-        """Analyze experiment results for success rates."""
+        """Analyze experiment results for success rates with real-time feedback."""
         all_correct = 0
         at_least_one_correct = 0
 
-        for rr_train in rr_trains:
+        print(f"    📊 Analyzing {iterations} iteration(s) for {problem}:")
+
+        for i, rr_train in enumerate(rr_trains, 1):
             ran_all_train_problems_correctly = rr_train[0].transform_ran_and_matched_for_all_inputs
             ran_at_least_one_train_problem_correctly = rr_train[0].transform_ran_and_matched_at_least_once
 
+            # Real-time feedback for each iteration
             if ran_all_train_problems_correctly:
                 all_correct += 1
+                status_icon = "✅"
+                status_text = "ALL_CORRECT"
+            elif ran_at_least_one_train_problem_correctly:
+                status_icon = "⚠️"
+                status_text = "PARTIAL"
+            else:
+                status_icon = "❌"
+                status_text = "FAILED"
+
+            if verbose:
+                print(f"      Iteration {i}: {status_icon} {status_text}")
+
+            # Count at_least_one_correct properly
             if ran_at_least_one_train_problem_correctly:
                 at_least_one_correct += 1
+
+        # Summary for this problem
+        all_correct_rate = all_correct / iterations
+        at_least_one_rate = at_least_one_correct / iterations
+
+        if all_correct_rate >= 0.8:
+            summary_icon = "🎯"
+            summary_color = "EXCELLENT"
+        elif all_correct_rate >= 0.5:
+            summary_icon = "✅"
+            summary_color = "GOOD"
+        elif at_least_one_rate >= 0.5:
+            summary_icon = "⚠️"
+            summary_color = "PARTIAL"
+        else:
+            summary_icon = "❌"
+            summary_color = "POOR"
+
+        print(f"    {summary_icon} Problem Results: {all_correct}/{iterations} all correct ({all_correct_rate:.1%}), "
+              f"{at_least_one_correct}/{iterations} partial ({at_least_one_rate:.1%}) - {summary_color}")
 
         return {
             "template": template,
@@ -276,8 +314,8 @@ Examples:
             "total_runs": iterations,
             "all_correct": all_correct,
             "at_least_one_correct": at_least_one_correct,
-            "all_correct_rate": all_correct / iterations,
-            "at_least_one_correct_rate": at_least_one_correct / iterations,
+            "all_correct_rate": all_correct_rate,
+            "at_least_one_correct_rate": at_least_one_rate,
             "individual_duration": self.individual_timings.get(f"{template}|{problem}", 0),
             "problem_duration": self.problem_timings.get(f"{template}|{problem}", 0),
         }
@@ -287,24 +325,37 @@ Examples:
         if not self.results_data:
             return
 
-        print("\n" + "=" * 120)
-        print("DETAILED RESULTS TABLE")
-        print("=" * 120)
+        print(f"\n📋 " + "═" * 90)
+        print(f"📊 DETAILED RESULTS TABLE 📊")
+        print("═" * 95)
 
-        # Header
-        print(f"{'Template':<35} {'Problem':<12} {'All_Correct':<12} {'At_Least_One':<12} {'Test_Time':<12} {'Branch_Time':<12}")
-        print("-" * 120)
+        # Header with better formatting
+        print(f"{'📝 Template':<40} {'🎲 Problem':<12} {'🎯 All%':<8} {'⚠️ Part%':<9} {'⏱️ Time':<10} {'📊 Grade':<8}")
+        print("─" * 95)
 
-        # Data rows
+        # Data rows with visual indicators
         for result in self.results_data:
-            template_short = result['template'][:32] + "..." if len(result['template']) > 32 else result['template']
+            template_short = result['template'][:35] + "..." if len(result['template']) > 35 else result['template']
             test_time = self.format_duration(result['individual_duration'])
-            branch_time = self.format_duration(result['problem_duration'])
 
-            print(f"{template_short:<35} {result['problem']:<12} {result['all_correct_rate']:<12.2f} "
-                  f"{result['at_least_one_correct_rate']:<12.2f} {test_time:<12} {branch_time:<12}")
+            # Determine grade emoji
+            if result['all_correct_rate'] >= 0.8:
+                grade = "🎯 A"
+            elif result['all_correct_rate'] >= 0.6:
+                grade = "✅ B"
+            elif result['all_correct_rate'] >= 0.4:
+                grade = "⚠️ C"
+            elif result['at_least_one_correct_rate'] >= 0.5:
+                grade = "🔶 D"
+            else:
+                grade = "❌ F"
 
-        print("-" * 120)
+            print(f"{template_short:<40} {result['problem']:<12} {result['all_correct_rate']:<7.1%} "
+                  f"{result['at_least_one_correct_rate']:<8.1%} {test_time:<10} {grade:<8}")
+
+        print("─" * 95)
+        print(f"Legend: 🎯A(≥80%) ✅B(60-79%) ⚠️C(40-59%) 🔶D(partial) ❌F(<40%)")
+        print("═" * 95)
 
     def generate_csv_output(self, output_dir: Path) -> str:
         """Generate CSV output file."""
@@ -321,8 +372,7 @@ Examples:
         df['individual_duration_formatted'] = df['individual_duration'].apply(self.format_duration)
         df['problem_duration_formatted'] = df['problem_duration'].apply(self.format_duration)
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        csv_file = output_dir / f"batch_results_{timestamp}.csv"
+        csv_file = output_dir / f"batch_results_{self.experiment_timestamp}.csv"
 
         df.to_csv(csv_file, index=False)
         return str(csv_file)
@@ -332,8 +382,7 @@ Examples:
         if not self.results_data:
             return ""
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        html_file = output_dir / f"batch_results_{timestamp}.html"
+        html_file = output_dir / f"batch_results_{self.experiment_timestamp}.html"
 
         total_duration = self.global_end_time - self.global_start_time
 
@@ -410,37 +459,71 @@ Examples:
 
     def run_batch_experiments(self, args: argparse.Namespace) -> None:
         """Main execution method with comprehensive tracking."""
-        # Record global start time
+        # Record global start time and set experiment timestamp
         self.global_start_time = time.time()
+        self.experiment_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        print("=== ARC-AGI Batch Experiment Runner ===")
-        self.log_timestamp("EXPERIMENT STARTED")
+        # Stylish header
+        print("\n" + "=" * 80)
+        print("🧠  ARC-AGI BATCH EXPERIMENT RUNNER  🧠")
+        print("=" * 80)
+        self.log_timestamp("🚀 EXPERIMENT STARTED")
 
         # Resolve selections
-        self.log_timestamp("Resolving template and problem selections...")
+        self.log_timestamp("🔍 Resolving template and problem selections...")
         templates_to_use = self.resolve_templates(args.templates)
         problems_to_use = self.resolve_problems(args.problems)
 
-        print(f"Method Module: {args.method}")
-        print(f"Model: {args.model}")
-        print(f"Iterations per test: {args.iterations}")
-        print(f"Templates to test ({len(templates_to_use)}):")
-        for i, template in enumerate(templates_to_use):
-            print(f"  {i}: {template}")
+        # Configuration display with better formatting
+        print(f"\n📋 EXPERIMENT CONFIGURATION")
+        print("─" * 50)
+        print(f"  🔧 Method Module: {args.method}")
+        print(f"  🤖 Model: {args.model}")
+        print(f"  🔄 Iterations per test: {args.iterations}")
 
-        print(f"Problems to test ({len(problems_to_use)}):")
+        print(f"\n📝 Templates to test ({len(templates_to_use)}):")
+        for i, template in enumerate(templates_to_use):
+            print(f"    {i+1}. {template}")
+
+        print(f"\n🎯 Problems to test ({len(problems_to_use)}):")
         for i, problem in enumerate(problems_to_use):
-            print(f"  {i}: {problem}")
+            print(f"    {i+1}. {problem}")
 
         # Calculate total combinations
         total_combinations = len(templates_to_use) * len(problems_to_use)
-        print(f"Total test combinations: {total_combinations}")
-        self.log_timestamp(f"Configuration complete. Starting {total_combinations} test combinations.")
+        print(f"\n🧮 Total test combinations: {total_combinations}")
+        print("─" * 50)
+        self.log_timestamp(f"✅ Configuration complete. Starting {total_combinations} test combinations.")
 
-        # Create output directory
-        output_dir = Path(args.output_dir)
+        # Create timestamp-based output directory
+        base_output_dir = Path(args.output_dir)
+        output_dir = base_output_dir / self.experiment_timestamp
         if not args.dry_run:
-            output_dir.mkdir(exist_ok=True)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            print(f"\n💾 Results will be saved to: {output_dir}")
+
+            # Create experiment summary log with better formatting
+            summary_log = output_dir / f"batch_summary_{self.experiment_timestamp}.log"
+            with open(summary_log, 'w') as f:
+                f.write("=" * 80 + "\n")
+                f.write("🧠  ARC-AGI BATCH EXPERIMENT SUMMARY  🧠\n")
+                f.write("=" * 80 + "\n\n")
+                f.write(f"📅 Experiment started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                f.write("📋 CONFIGURATION:\n")
+                f.write("─" * 40 + "\n")
+                f.write(f"  🔧 Method: {args.method}\n")
+                f.write(f"  🤖 Model: {args.model}\n")
+                f.write(f"  🔄 Iterations: {args.iterations}\n\n")
+                f.write(f"📝 Templates ({len(templates_to_use)}):\n")
+                for i, template in enumerate(templates_to_use, 1):
+                    f.write(f"  {i}. {template}\n")
+                f.write(f"\n🎯 Problems ({len(problems_to_use)}):\n")
+                for i, problem in enumerate(problems_to_use, 1):
+                    f.write(f"  {i}. {problem}\n")
+                f.write(f"\n🧮 Total combinations: {total_combinations}\n")
+                f.write("=" * 80 + "\n\n")
+                f.write("📊 INDIVIDUAL TEST RESULTS:\n")
+                f.write("─" * 40 + "\n")
 
         # Load method module
         if not args.dry_run:
@@ -460,15 +543,21 @@ Examples:
         # Template-level timing loop
         for template in templates_to_use:
             template_start_time = time.time()
-            self.log_timestamp(f"Starting template branch: {template} ({len(problems_to_use)} problems)")
+
+            print(f"\n🔄 " + "=" * 70)
+            print(f"📝 TEMPLATE BRANCH: {template}")
+            print("=" * 75)
+            self.log_timestamp(f"🌿 Starting template branch: {template} ({len(problems_to_use)} problems)")
 
             # Problem-level timing loop
             for problem in problems_to_use:
                 problem_start_time = time.time()
                 current_test += 1
 
-                print(f"\n[{current_test}/{total_combinations}] Testing: {template} with {problem}")
-                self.log_timestamp(f"Branch: {template} → {problem} (Test {current_test}/{total_combinations})")
+                print(f"\n🎯 TEST [{current_test:02d}/{total_combinations:02d}] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                print(f"    📝 Template: {template}")
+                print(f"    🎲 Problem:  {problem}")
+                self.log_timestamp(f"🔍 Branch: {template} → {problem} (Test {current_test}/{total_combinations})")
 
                 try:
                     llm_responses, rr_trains = self.run_single_experiment(
@@ -478,12 +567,29 @@ Examples:
                     # Collect LLM responses
                     self.all_llm_responses.extend(llm_responses)
 
-                    # Analyze results
+                    # Analyze results with real-time feedback
                     if not args.dry_run:
-                        result_analysis = self.analyze_results(template, problem, rr_trains, args.iterations)
+                        result_analysis = self.analyze_results(template, problem, rr_trains, args.iterations, args.verbose)
                         self.results_data.append(result_analysis)
 
-                    print("  ✓ Success")
+                        # Log individual test result to summary with better formatting
+                        summary_log = output_dir / f"batch_summary_{self.experiment_timestamp}.log"
+                        with open(summary_log, 'a') as f:
+                            success_icon = "🎯" if result_analysis['all_correct_rate'] >= 0.8 else "✅" if result_analysis['all_correct_rate'] >= 0.5 else "⚠️" if result_analysis['at_least_one_correct_rate'] >= 0.5 else "❌"
+                            f.write(f"{success_icon} Test {current_test:02d}: {template} + {problem}\n")
+                            f.write(f"    📊 Results: {result_analysis['all_correct']}/{args.iterations} all correct ({result_analysis['all_correct_rate']:.1%}), ")
+                            f.write(f"{result_analysis['at_least_one_correct']}/{args.iterations} partial ({result_analysis['at_least_one_correct_rate']:.1%})\n")
+                            f.write(f"    ⏱️  Duration: {self.format_duration(result_analysis['individual_duration'])}\n\n")
+
+                    # Overall success indicator
+                    if not args.dry_run and result_analysis['all_correct_rate'] >= 0.8:
+                        print("  🎯 Excellent Results!")
+                    elif not args.dry_run and result_analysis['all_correct_rate'] >= 0.5:
+                        print("  ✅ Good Results!")
+                    elif not args.dry_run and result_analysis['at_least_one_correct_rate'] >= 0.5:
+                        print("  ⚠️ Partial Success")
+                    else:
+                        print("  ✓ Test Completed" if args.dry_run else "  ❌ Poor Results")
 
                 except Exception as e:
                     print(f"  ✗ Failed: {str(e)}")
@@ -491,13 +597,21 @@ Examples:
                         import traceback
                         traceback.print_exc()
 
+                    # Log failure to summary with better formatting
+                    if not args.dry_run:
+                        summary_log = output_dir / f"batch_summary_{self.experiment_timestamp}.log"
+                        with open(summary_log, 'a') as f:
+                            f.write(f"💥 Test {current_test:02d}: {template} + {problem}\n")
+                            f.write(f"    ❌ Status: FAILED\n")
+                            f.write(f"    🚨 Error: {str(e)}\n\n")
+
                 # Problem-level timing summary
                 problem_end_time = time.time()
                 problem_duration = problem_end_time - problem_start_time
                 self.problem_timings[f"{template}|{problem}"] = problem_duration
 
                 formatted_duration = self.format_duration(problem_duration)
-                self.log_timestamp(f"Problem completed: {problem} in {formatted_duration}")
+                self.log_timestamp(f"✅ Problem completed: {problem} in {formatted_duration}")
 
             # Template-level timing summary
             template_end_time = time.time()
@@ -505,13 +619,36 @@ Examples:
             self.template_timings[template] = template_duration
 
             formatted_duration = self.format_duration(template_duration)
-            self.log_timestamp(f"Template branch completed: {template} in {formatted_duration} ({len(problems_to_use)} problems)")
+            self.log_timestamp(f"🏁 Template branch completed: {template} in {formatted_duration} ({len(problems_to_use)} problems)")
+
+            # Template performance summary
+            if not args.dry_run:
+                template_results = [r for r in self.results_data if r['template'] == template]
+                if template_results:
+                    excellent_count = len([r for r in template_results if r['all_correct_rate'] >= 0.8])
+                    good_count = len([r for r in template_results if 0.5 <= r['all_correct_rate'] < 0.8])
+                    partial_count = len([r for r in template_results if r['all_correct_rate'] < 0.5 and r['at_least_one_correct_rate'] >= 0.5])
+                    poor_count = len([r for r in template_results if r['at_least_one_correct_rate'] < 0.5])
+
+                    avg_all_correct = sum(r['all_correct_rate'] for r in template_results) / len(template_results)
+                    avg_partial = sum(r['at_least_one_correct_rate'] for r in template_results) / len(template_results)
+
+                    print(f"\n📊 " + "─" * 60)
+                    print(f"📈 TEMPLATE PERFORMANCE SUMMARY: {template}")
+                    print("─" * 65)
+                    print(f"    🎯 Excellent (≥80%): {excellent_count:2d} problems")
+                    print(f"    ✅ Good (50-79%):   {good_count:2d} problems")
+                    print(f"    ⚠️  Partial (<50% all, ≥50% some): {partial_count:2d} problems")
+                    print(f"    ❌ Poor (<50% any): {poor_count:2d} problems")
+                    print(f"    📊 Average success: {avg_all_correct:.1%} all correct, {avg_partial:.1%} partial")
+                    print(f"    ⏱️  Total duration: {formatted_duration}")
+                    print("─" * 65)
 
         # Record global end time
         self.global_end_time = time.time()
         total_duration = self.global_end_time - self.global_start_time
 
-        self.log_timestamp("All tests completed. Generating results...")
+        self.log_timestamp("🎉 All tests completed. Generating results...")
 
         # Generate outputs
         if not args.dry_run and self.results_data:
@@ -520,43 +657,92 @@ Examples:
             csv_file = self.generate_csv_output(output_dir)
             html_file = self.generate_html_output(output_dir)
 
-            print(f"\nResults saved to:")
-            if csv_file:
-                print(f"  CSV: {csv_file}")
-            if html_file:
-                print(f"  HTML: {html_file}")
+            # Add final summary to log with enhanced formatting
+            summary_log = output_dir / f"batch_summary_{self.experiment_timestamp}.log"
+            with open(summary_log, 'a') as f:
+                f.write("=" * 80 + "\n")
+                f.write("🎉  EXPERIMENT COMPLETED  🎉\n")
+                f.write("=" * 80 + "\n\n")
+                f.write(f"📅 Completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"⏱️  Total duration: {self.format_duration(total_duration)}\n\n")
 
-        # Final summary
-        print(f"\n=== Batch Experiment Summary ===")
-        print(f"Start Time: {datetime.fromtimestamp(self.global_start_time).strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"End Time: {datetime.fromtimestamp(self.global_end_time).strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"Total Duration: {self.format_duration(total_duration)}")
-        print(f"Total tests: {total_combinations}")
+                if self.results_data:
+                    successful_tests = len([r for r in self.results_data if r['all_correct_rate'] > 0])
+                    f.write("📊 FINAL RESULTS SUMMARY:\n")
+                    f.write("─" * 40 + "\n")
+                    f.write(f"🎯 Tests with success: {successful_tests}/{len(self.results_data)} ({successful_tests / len(self.results_data):.1%})\n")
+                    f.write(f"⏱️  Average time per test: {self.format_duration(total_duration / total_combinations)}\n\n")
+
+                    # Template timing breakdown
+                    f.write("🕐 TEMPLATE TIMING BREAKDOWN:\n")
+                    f.write("─" * 40 + "\n")
+                    for template in templates_to_use:
+                        template_time = self.template_timings.get(template, 0)
+                        f.write(f"  📝 {template}: {self.format_duration(template_time)}\n")
+                f.write("\n" + "=" * 80 + "\n")
+
+            print(f"\n💾 " + "=" * 60)
+            print(f"📁 RESULTS SAVED")
+            print("=" * 65)
+            print(f"    📂 Directory: {output_dir}")
+            if csv_file:
+                print(f"    📊 CSV File: {csv_file.name}")
+            if html_file:
+                print(f"    🌐 HTML Report: {html_file.name}")
+            print(f"    📝 Summary Log: {summary_log.name}")
+            print("=" * 65)
+
+        # Final summary with enhanced aesthetics
+        print(f"\n🏆 " + "=" * 70)
+        print(f"🎉 FINAL EXPERIMENT SUMMARY 🎉")
+        print("=" * 75)
+        print(f"⏰ Start Time:  {datetime.fromtimestamp(self.global_start_time).strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"🏁 End Time:    {datetime.fromtimestamp(self.global_end_time).strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"⏱️  Duration:    {self.format_duration(total_duration)}")
+        print(f"🧮 Total tests: {total_combinations}")
 
         if self.results_data:
             successful_tests = len([r for r in self.results_data if r['all_correct_rate'] > 0])
-            print(f"Tests with some success: {successful_tests}")
-            print(f"Success rate: {successful_tests / len(self.results_data):.1%}")
-            print(f"Average time per test: {self.format_duration(total_duration / total_combinations)}")
+            excellent_tests = len([r for r in self.results_data if r['all_correct_rate'] >= 0.8])
+            good_tests = len([r for r in self.results_data if 0.5 <= r['all_correct_rate'] < 0.8])
+
+            print(f"\n📊 PERFORMANCE BREAKDOWN:")
+            print("─" * 40)
+            print(f"🎯 Excellent (≥80%): {excellent_tests:2d} tests")
+            print(f"✅ Good (50-79%):   {good_tests:2d} tests")
+            print(f"⚠️  Some success:    {successful_tests - excellent_tests - good_tests:2d} tests")
+            print(f"❌ No success:      {len(self.results_data) - successful_tests:2d} tests")
+            print(f"📈 Overall success rate: {successful_tests / len(self.results_data):.1%}")
+            print(f"⚡ Average time per test: {self.format_duration(total_duration / total_combinations)}")
 
             # Template timing breakdown
-            print(f"\n=== Template Timing Breakdown ===")
+            print(f"\n🕐 TEMPLATE PERFORMANCE:")
+            print("─" * 50)
             for template in templates_to_use:
                 template_time = self.template_timings.get(template, 0)
                 avg_per_problem = template_time / len(problems_to_use)
-                print(f"  {template}: {self.format_duration(template_time)} "
-                      f"(avg: {self.format_duration(avg_per_problem)} per problem)")
+                template_results = [r for r in self.results_data if r['template'] == template]
+                avg_success = sum(r['all_correct_rate'] for r in template_results) / len(template_results) if template_results else 0
+
+                print(f"📝 {template[:40]:40s}")
+                print(f"    ⏱️  {self.format_duration(template_time):>10s} (avg: {self.format_duration(avg_per_problem):>8s}/problem)")
+                print(f"    📊 {avg_success:>9.1%} average success rate")
 
         # LLM usage statistics
         if self.all_llm_responses:
+            print(f"\n🤖 LLM USAGE STATISTICS:")
+            print("─" * 30)
             provider_counts = Counter([response.provider for response in self.all_llm_responses])
-            print(f"\nProvider counts: {dict(provider_counts)}")
+            for provider, count in provider_counts.items():
+                print(f"    🔗 {provider}: {count} calls")
 
             token_usages = [response.usage.total_tokens for response in self.all_llm_responses]
-            print(f"Max token usage: {max(token_usages)}")
-            print(f"Median token usage: {sorted(token_usages)[len(token_usages)//2]}")
+            print(f"    🎯 Max tokens: {max(token_usages):,}")
+            print(f"    📊 Median tokens: {sorted(token_usages)[len(token_usages)//2]:,}")
+            print(f"    📈 Total tokens: {sum(token_usages):,}")
 
-        self.log_timestamp("EXPERIMENT COMPLETED")
+        print("=" * 75)
+        self.log_timestamp("🎉 EXPERIMENT COMPLETED SUCCESSFULLY! 🎉")
 
 
 def main():
