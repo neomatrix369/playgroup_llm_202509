@@ -685,10 +685,12 @@ Examples:
             print(f"📁 RESULTS SAVED")
             print("=" * 65)
             print(f"    📂 Directory: {output_dir}")
-            if csv_file:
-                print(f"    📊 CSV File: {csv_file.name}")
-            if html_file:
-                print(f"    🌐 HTML Report: {html_file.name}")
+            if csv_file and csv_file != "":
+                csv_path = Path(csv_file) if isinstance(csv_file, str) else csv_file
+                print(f"    📊 CSV File: {csv_path.name}")
+            if html_file and html_file != "":
+                html_path = Path(html_file) if isinstance(html_file, str) else html_file
+                print(f"    🌐 HTML Report: {html_path.name}")
             print(f"    📝 Summary Log: {summary_log.name}")
             print("=" * 65)
 

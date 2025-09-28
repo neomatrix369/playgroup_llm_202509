@@ -81,21 +81,37 @@ def execute_transform(code_as_line, problems):
             # TimeoutError occurs for
             # "exp_2024-07-02T08_Meta-Llama-3-70B-Instruct-IQ1_S.gguf_a85_listgrid"
             # due to infinite loop
-            pass
+            # Fallback: run serially when joblib fails
+            result_chunks = []
+            for prob in problems:
+                try:
+                    result = exec_and_run(code_as_line, np.array(copy.deepcopy(prob["input"])))
+                    result_chunks.append(result)
+                except Exception:
+                    # If individual execution fails, append None to maintain index alignment
+                    result_chunks.append(None)
 
         for prob_n, prob in enumerate(problems):
             # wrapped in copies as a self protection mechanism
             # initial = copy.deepcopy(prob["input"]) # initial
             # final_gen = transform(initial)  # the generated final output
             final_gen = result_chunks[prob_n]
-            if not isinstance(final_gen, np.ndarray):
-                raise ValueError(
-                    f"Expecting `transform` to return a numpy array, got {type(final)}."
-                )
-            # final = np.array(copy.deepcopy(prob["output"]))  # desired final
+
+            # Get the expected final output for comparison
             final = np.array(copy.deepcopy(prob["output"]))  # desired final
 
-            was_correct = (final_gen == final).all()
+            # Handle case where execution failed and result is None
+            if final_gen is None:
+                # Create a dummy array for failed execution
+                final_gen = np.array([[]])
+                was_correct = False
+            else:
+                if not isinstance(final_gen, np.ndarray):
+                    raise ValueError(
+                        f"Expecting `transform` to return a numpy array, got {type(final_gen)}."
+                    )
+                was_correct = (final_gen == final).all()
+
             if was_correct:
                 partial_score += 1  # we get a point if we match the desired final
             initial = prob["input"]
