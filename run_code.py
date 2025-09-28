@@ -106,10 +106,14 @@ def execute_transform(code_as_line, problems):
                 final_gen = np.array([[]])
                 was_correct = False
             else:
+                # Convert to numpy array if it's not already one
                 if not isinstance(final_gen, np.ndarray):
-                    raise ValueError(
-                        f"Expecting `transform` to return a numpy array, got {type(final_gen)}."
-                    )
+                    try:
+                        final_gen = np.array(final_gen)
+                    except (ValueError, TypeError) as e:
+                        raise ValueError(
+                            f"Cannot convert transform output to numpy array. Got {type(final_gen)}: {e}"
+                        )
                 was_correct = (final_gen == final).all()
 
             if was_correct:
