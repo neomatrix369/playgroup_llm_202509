@@ -68,7 +68,62 @@ Note if it got an explanation right, but wrote bad code (e.g. with a SyntaxError
 # rr_train[0].code_ran_on_all_inputs will be True if all train examples ran regardless of output quality
 # rr_train[0].transform_ran_and_matched_for_all_inputs will be True if all train inputs were transformed correctly
 # rr_train[1] gives an ExecutionOutcome object, for each initial/final pair it shows what the transform function generated
-``` 
+```
+
+## Batch Experiment Runner
+
+The `run_all_problems.py` script provides a comprehensive batch experiment runner for systematic ARC-AGI testing across multiple templates and problems.
+
+### Features
+
+- **Multi-template and multi-problem testing**: Run experiments across all combinations of templates and problems
+- **Flexible selection**: Choose specific templates and problems by name or index
+- **Comprehensive timing tracking**: Global, template-level, and individual test timing
+- **Real-time progress reporting**: Live feedback with timestamps and success indicators
+- **Multi-format output**: Console tables, CSV files, HTML reports, and detailed logs
+- **Robust error handling**: Graceful fallback when parallel execution fails
+- **Success rate analysis**: Detailed performance breakdown with visual indicators
+
+### Usage Examples
+
+```bash
+# Run all templates and problems (comprehensive test)
+python run_all_problems.py
+
+# Run specific templates and problems with multiple iterations
+python run_all_problems.py -t "baseline_justjson_enhanced.j2,reflexion_enhanced.j2" -p "0d3d703e,08ed6ac7" -i 5
+
+# Test with different method module and model
+python run_all_problems.py --method method2_reflexion --model openrouter/deepseek/deepseek-chat-v3-0324
+
+# Dry run to preview what would be executed
+python run_all_problems.py --dry-run --verbose
+
+# Quick test of a single template-problem combination
+python run_all_problems.py -t "baseline_justjson_enhanced.j2" -p "0d3d703e" -i 1
+```
+
+### Output Structure
+
+Results are saved in timestamped directories under `batch_results/` containing:
+- **CSV file**: Structured data for analysis (`batch_results_TIMESTAMP.csv`)
+- **HTML report**: Visual dashboard with color-coded results (`batch_results_TIMESTAMP.html`)
+- **Summary log**: Detailed execution log with timing breakdown (`batch_summary_TIMESTAMP.log`)
+
+### Performance Indicators
+
+- 🎯 **Excellent (≥80%)**: Grade A performance
+- ✅ **Good (50-79%)**: Grade B performance
+- ⚠️ **Partial**: Some success but inconsistent
+- ❌ **Poor (<50%)**: Grade F, needs improvement
+
+### Recent Improvements
+
+The batch runner has been enhanced with robust error handling:
+- **Fixed file path handling**: Resolves "'str' object has no attribute 'name'" errors
+- **Improved execution resilience**: Fallback to serial execution when parallel processing fails
+- **Better dependency management**: Added missing scikit-image dependency
+- **Enhanced logging**: Proper logger initialization across modules 
 
 Now compare this to the EXPT (experiments) results - Ian on screen - better prompt sort of gets us further.
 
