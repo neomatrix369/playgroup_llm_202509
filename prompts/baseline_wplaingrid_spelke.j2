@@ -1,0 +1,126 @@
+You are a clever problem solving machine that uses Core Knowledge principles to analyze logical puzzles systematically. You need to describe what changes between several examples and implement a solution.
+
+## Core Knowledge Framework (Spelke-Informed Analysis)
+
+Ground your reasoning in these innate cognitive systems:
+
+**Objectness and Elementary Physics:**
+- Cohesion (contiguity of regions), persistence, contact-based interaction
+- Look for: connected components, boundaries, fills, growth/shrink by contact
+
+**Elementary Geometry and Topology:**
+- Relative position, adjacency, symmetry, reflection/rotation, connectivity, holes
+- Look for: topological equivalence, symmetry conservation/breaking
+
+**Place System and Frames of Reference:**
+- Allocentric vs egocentric frames, grid axes, scan orders (row/column)
+- Look for: relative order, alignment, axis orientation, stable reference frames
+
+**Natural Numbers and Elementary Arithmetic:**
+- Counts, ranks, orderings, parity/periodicity, simple mappings, frequency
+- Look for: conserved counts, proportionality, ordinal rules
+
+**Form and Category Recognition:**
+- Grouping by shared properties, prototypes/exemplars, category stability under transforms
+- Look for: category membership, feature-based grouping consistency
+
+**Analysis Preferences (apply in order):**
+1. Prefer relational/topological rules over absolute coordinates when both fit
+2. Prefer object cohesion and connectedness-based reasoning over pixel-wise lookup
+3. Prefer minimal description length (simpler rule that fits all training pairs)
+4. Use stable tie-breakers: topmost, leftmost, earliest discovery order
+5. Avoid arbitrary color lookups unless supported across all examples
+
+## Problem Examples
+
+You'll see input and output pairs for a grid of numbers where each number is in range [0...9]:
+
+{% set grid_method = make_grid_plain -%}
+{% for pattern_input_output in patterns_input_output %}
+Example {{ loop.index }}:
+Input pattern (JSON): {{ pattern_input_output }}
+Input grid:
+{{ grid_method(pattern_input_output['input']) }}
+Output grid:
+{{ grid_method(pattern_input_output['output']) }}
+
+{% endfor -%}
+
+## Analysis Requirements
+
+**Step 1: Problem Category Hypothesis**
+Before trying to solve it, hypothesize what type of reasoning focus this problem belongs to.
+
+Use the following categories:
+- Color-based transformations
+- Shape recognition and manipulation
+- Symmetry and reflection
+- Object counting / repetition
+- Spatial relations / positioning
+- Pattern completion / continuation
+- Noise removal / denoising
+- Containment / enclosure
+- Arithmetic / logical operations on attributes
+
+**Step 2: Core Knowledge Assessment**
+For each cognitive system listed above, briefly note:
+- Whether it applies to this problem
+- How it manifests in the examples
+- Which invariants or transformations you observe
+
+**Step 3: Pattern Recognition**
+Identify across all examples:
+- Elements that remain constant (counts, topology, alignments)
+- Transformations (color mappings, motions, growth/shrink, re-labeling)
+- Tag observations with Core Knowledge categories: [Objectness], [Geometry], [Place], [Number], [Form]
+
+**Step 4: Rule Explanation**
+Write your analysis in the following format:
+
+<PROBLEM_CATEGORY>
+- Categories that apply: [list one or more from the categories above]
+- Rationale: [short explanation of why these categories fit]
+</PROBLEM_CATEGORY>
+
+<CORE_KNOWLEDGE_ANALYSIS>
+- Objectness: [your assessment]
+- Geometry: [your assessment]
+- Place: [your assessment]
+- Number: [your assessment]
+- Form: [your assessment]
+</CORE_KNOWLEDGE_ANALYSIS>
+
+<EXPLANATION>
+Write bullet points explaining the transformation rules, considering:
+- What visual patterns you observe (clusters, symmetries, boundaries)
+- What remains invariant across examples
+- What changes and how (color, position, size, count)
+- Which Core Knowledge principles best explain the pattern
+- Clear tie-breakers for any ambiguous cases (e.g., "leftmost first", "largest object")
+</EXPLANATION>
+
+**Step 5: Implementation**
+After your analysis, write a Python solution that implements the most robust hypothesis:
+
+```python
+import numpy as np
+
+def transform(initial):
+    """
+    Core Knowledge basis: [specify which systems apply]
+    Rule: [brief description of the transformation rule]
+    Tie-breakers: [specify any ordering/selection rules]
+    """
+    assert isinstance(initial, np.ndarray)
+
+    # Implementation following Core Knowledge principles
+    # Focus on object-level reasoning, topological relationships,
+    # and simple ordinal/counting schemes
+
+    # ... your implementation here ...
+
+    assert isinstance(final, np.ndarray)
+    return final
+```
+
+Remember: Favor object cohesion, topological relationships, and simple ordinal schemes. Look for the simplest rule that explains all training examples and would generalize to novel layouts and colors.

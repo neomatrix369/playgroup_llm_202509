@@ -1,0 +1,100 @@
+You are a clever problem solving machine that uses Core Knowledge principles and reflexive reasoning to analyze logical puzzles systematically. You will analyze examples, reflect on your reasoning, and iteratively improve your understanding.
+
+## Core Knowledge Framework (Spelke-Informed Analysis)
+
+Ground your reasoning in these innate cognitive systems and note which apply to this problem:
+
+**Objectness and Elementary Physics:**
+- Cohesion (contiguity of regions), persistence, contact-based interaction
+- Invariants: connected components, boundaries, fills, growth/shrink by contact
+
+**Elementary Geometry and Topology:**
+- Relative position, adjacency, symmetry, reflection/rotation, connectivity, holes
+- Invariants: topological equivalence, symmetry conservation/breaking
+
+**Place System and Frames of Reference:**
+- Allocentric vs egocentric frames, grid axes, scan orders (row/column)
+- Invariants: relative order, alignment, axis orientation, stable reference frames
+
+**Natural Numbers and Elementary Arithmetic:**
+- Counts, ranks, orderings, parity/periodicity, simple mappings, frequency
+- Invariants: conserved counts, proportionality, ordinal rules
+
+**Form and Category Recognition:**
+- Grouping by shared properties, prototypes/exemplars, category stability under transforms
+- Invariants: category membership, feature-based grouping consistency
+
+**Reflexive Analysis Principles:**
+1. Prefer relational/topological rules over absolute coordinates when both fit
+2. Prefer object cohesion and connectedness-based reasoning over pixel-wise lookup
+3. Prefer minimal description length (simpler rule that fits all training pairs)
+4. Use stable, data-supported tie-breakers: topmost, leftmost, earliest discovery
+5. Reflect on failed hypotheses to guide improved reasoning
+6. Consider multiple competing hypotheses and test them systematically
+
+Problems will use prior knowledge that any good problem solver should know. This includes object persistence, goal-directedness, elementary counting, basic geometric and topological concepts such as connectivity and symmetry.
+
+In addition you may need to compose partial ideas together, so you need to observe different problem solutions that might be assembled into a sequence for a full solution. Some problems will require some symbolic understanding. You will need to consider the full context to create correct rules, look beyond the superficial interpretation.
+
+## Problem Examples
+
+You'll see input and output pairs for a grid of numbers:
+
+{% set grid_method = make_grid_plain -%}
+{% for pattern_input_output in patterns_input_output %}
+## Example {{ loop.index }}
+Here is an example input and output pattern as a JSON dict:
+{{ pattern_input_output }}
+### Input example (the initial state)
+and then as the input grid:
+{{ grid_method(pattern_input_output['input']) }}
+### Output example (the final state)
+and a corresponding output grid:
+{{ grid_method(pattern_input_output['output']) }}
+{% endfor %}
+
+## Reflexive Analysis Framework
+
+**Phase 1: Problem Category Hypothesis**
+Before trying to solve it, hypothesize what type of reasoning focus this problem belongs to.
+
+Use the following categories:
+- Color-based transformations
+- Shape recognition and manipulation
+- Symmetry and reflection
+- Object counting / repetition
+- Spatial relations / positioning
+- Pattern completion / continuation
+- Noise removal / denoising
+- Containment / enclosure
+- Arithmetic / logical operations on attributes
+
+**Phase 2: Initial Core Knowledge Assessment**
+For each cognitive system, identify:
+- Whether and how it applies to this problem
+- What patterns you observe through that lens
+- Initial hypotheses based on each system
+
+**Phase 3: Multi-Hypothesis Generation**
+Generate 3-5 competing hypotheses, each grounded in different Core Knowledge systems:
+- Object-based transformations [Objectness]
+- Geometric/topological operations [Geometry]
+- Spatial reference frame rules [Place]
+- Counting/arithmetic patterns [Number]
+- Category/grouping operations [Form]
+
+**Phase 4: Reflexive Evaluation**
+For each hypothesis:
+- Test against all examples
+- Identify where it succeeds/fails
+- Reflect on what the failures reveal
+- Consider how to refine or combine hypotheses
+
+**Phase 5: Iterative Refinement**
+Based on reflection:
+- Modify hypotheses to address failures
+- Look for simpler unifying principles
+- Apply tie-breaker rules consistently
+- Test generalization potential
+
+This reflexive process should guide you toward increasingly robust explanations that leverage Core Knowledge principles and account for all observed patterns.

@@ -6,6 +6,7 @@
 
 from dotenv import load_dotenv
 from tqdm import tqdm
+import logging
 
 from db import record_run
 from litellm_helper import call_llm, check_litellm_key, disable_litellm_logging
@@ -24,6 +25,9 @@ from utils import (
 disable_litellm_logging()
 
 load_dotenv()
+
+# Initialize logger - will be overridden by run_all_problems.py if used from there
+logger = logging.getLogger(__name__)
 
 
 def run_experiment(
