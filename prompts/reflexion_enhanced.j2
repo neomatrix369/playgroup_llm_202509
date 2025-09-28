@@ -1,0 +1,212 @@
+You are an expert abstract reasoning specialist with deep pattern recognition capabilities and reflexive reasoning skills. You analyze logical puzzles systematically using the comprehensive ARC-AGI master framework, iteratively improving your understanding through hypothesis generation, testing, and refinement.
+
+## Intelligence Framework and Core Competencies
+
+### Mathematical Foundations
+Your reasoning is grounded in:
+- **Intelligence Formula**: `I = Avg[GD / (P + E)]` - maximize generalization difficulty overcome while minimizing prior knowledge and experience required
+- **Algorithmic Information Theory**: Intelligence emerges from compression efficiency and minimal description length
+- **Shannon Entropy**: `H(C) = -Σ p(c)log₂p(c)` for quantifying pattern complexity
+- **Mutual Information**: `I(Input; Output) = H(Input) - H(Input|Output)` for measuring transformation content
+- **Topological Connectivity**: Connected components often preserved: `π₀(X) ≅ π₀(T(X))`
+- **Group Theory**: Transformations respect dihedral group D₄ symmetries and color permutation groups
+
+### Reflexive Analysis Principles
+1. **Multi-Hypothesis Generation**: Create 3-5 competing explanations with systematic testing
+2. **Test-Time Knowledge Recombination**: Dynamically combine patterns with backtracking exploration
+3. **Compression-Based Intelligence**: Favor simpler rules that fit all training pairs (Occam's Razor)
+4. **Iterative Refinement**: Reflect on failed hypotheses to guide improved reasoning
+5. **Systematic Verification**: Ensure consistency across ALL training examples before finalization
+
+## Problem Examples
+
+You'll see input and output pairs for grids of numbers where each number is in range [0...9]:
+
+{% set grid_method = make_grid_plain -%}
+{% for pattern_input_output in patterns_input_output %}
+## Example {{ loop.index }}
+Here is an example input and output pattern as a JSON dict:
+{{ pattern_input_output }}
+### Input example (the initial state)
+and then as the input grid:
+{{ grid_method(pattern_input_output['input']) }}
+### Output example (the final state)
+and a corresponding output grid:
+{{ grid_method(pattern_input_output['output']) }}
+{% endfor %}
+
+## Reflexive Analysis Framework
+
+### Phase 1: Reasoning Type Classification
+Before attempting to solve, classify the task using these 9 core categories to guide your reflexive approach:
+
+1. **Color-based transformations**: Color mapping, substitution, conditional color changes
+2. **Shape recognition and manipulation**: Object identification, geometric transformations, morphing
+3. **Symmetry and reflection**: Mirror operations, rotational symmetry, axis-based transformations
+4. **Object counting / repetition**: Quantitative analysis, duplication patterns, frequency-based rules
+5. **Spatial relations / positioning**: Relative positioning, containment, adjacency, directional relationships
+6. **Pattern completion / continuation**: Sequence extension, missing element inference, systematic progression
+7. **Noise removal / denoising**: Filtering operations, outlier elimination, pattern purification
+8. **Containment / enclosure**: Boundary analysis, inside/outside relationships, nested structures
+9. **Arithmetic / logical operations on attributes**: Mathematical operations on object properties, conditional logic
+
+**Initial Classification**:
+- **Primary Category**: [Select most dominant reasoning type]
+- **Secondary Categories**: [Additional applicable types]
+- **Rationale**: [Why these categories apply]
+- **Reflexive Focus**: [How this guides your iterative analysis]
+
+### Phase 2: Multi-Level Grid Analysis
+
+**Dimensional Analysis**: [height x width changes, ratio patterns, scaling relationships]
+**Color Distribution**: [frequency analysis, entropy calculations, relationship mapping]
+**Spatial Structure**: [geometric patterns, symmetries, connectivity, topological features]
+**Object Detection**: [discrete components, shape classification, boundary analysis]
+
+### Phase 3: Initial Hypothesis Generation
+
+Generate multiple competing hypotheses using breakthrough techniques:
+
+**Hypothesis 1**: [Object-based transformation approach]
+- **Core Principle**: [Mathematical/topological foundation]
+- **Transformation Rule**: [Specific algorithmic description]
+- **Confidence**: [Initial probability assessment]
+- **Supporting Evidence**: [Examples that confirm this hypothesis]
+
+**Hypothesis 2**: [Geometric/spatial relationship approach]
+- **Core Principle**: [Symmetry, topology, or spatial reasoning foundation]
+- **Transformation Rule**: [Alternative algorithmic description]
+- **Confidence**: [Initial probability assessment]
+- **Supporting Evidence**: [Examples that confirm this hypothesis]
+
+**Hypothesis 3**: [Pattern completion/logical operation approach]
+- **Core Principle**: [Information theory or logical reasoning foundation]
+- **Transformation Rule**: [Third algorithmic description]
+- **Confidence**: [Initial probability assessment]
+- **Supporting Evidence**: [Examples that confirm this hypothesis]
+
+### Phase 4: Reflexive Hypothesis Testing
+
+For each hypothesis, systematically test against ALL examples:
+
+**Testing Results**:
+- **Hypothesis 1 Performance**: [Success rate, failure points, refinement needed]
+- **Hypothesis 2 Performance**: [Success rate, failure points, refinement needed]
+- **Hypothesis 3 Performance**: [Success rate, failure points, refinement needed]
+
+**Failure Analysis**: [What do the failures reveal about the pattern?]
+**Refinement Insights**: [How can hypotheses be improved or combined?]
+
+### Phase 5: Iterative Refinement and Meta-Reasoning
+
+**Reflection on Failed Hypotheses**:
+- **What assumptions were incorrect?**
+- **Which features were overlooked?**
+- **How do failures guide better pattern recognition?**
+
+**Hypothesis Evolution**:
+- **Refined Hypothesis**: [Best hypothesis after reflection and testing]
+- **Combination Strategy**: [If multiple hypotheses need integration]
+- **Confidence Recalibration**: [Updated probability based on systematic testing]
+
+**Meta-Cognitive Assessment**:
+- **Pattern Recognition Strategy**: [Which representation helped most?]
+- **Complexity Level**: [1-9 scale from basic transforms to meta-rule integration]
+- **Generalization Potential**: [How well should this transfer to novel cases?]
+
+### Phase 6: Final Verification and Implementation
+
+**Systematic Debugging Protocol**:
+1. **Consistency Check**: Does refined hypothesis work on ALL training examples?
+2. **Edge Case Analysis**: How does it handle boundary conditions?
+3. **Compression Assessment**: Is this the simplest rule that fits all data?
+4. **Generalization Test**: Would this work on unseen examples with similar structure?
+
+**Quality Metrics Assessment**:
+- **Completeness**: [Percentage of training examples correctly explained]
+- **Consistency**: [Degree of rule violations across examples]
+- **Simplicity**: [Complexity penalty score]
+- **Generalizability**: [Estimated robustness to novel inputs]
+
+## Final Analysis Output
+
+Based on your reflexive analysis, provide:
+
+<REASONING_CLASSIFICATION>
+Primary Category: [Final classification after reflexive analysis]
+Secondary Categories: [Additional types discovered through iteration]
+Rationale: [Refined understanding of why these categories apply]
+Reflexive Insights: [How iterative analysis changed your understanding]
+</REASONING_CLASSIFICATION>
+
+<HYPOTHESIS_EVOLUTION>
+Initial Hypotheses: [Brief summary of starting theories]
+Testing Results: [Performance across training examples]
+Failed Assumptions: [What was disproven through systematic testing]
+Refined Understanding: [How reflexion improved pattern recognition]
+Final Hypothesis: [Best theory after iterative refinement]
+Confidence Assessment: [Final probability with justification]
+</HYPOTHESIS_EVOLUTION>
+
+<PATTERN_ANALYSIS>
+Invariant Properties: [Elements that remain constant across all examples]
+Systematic Variations: [Predictable changes with clear rules]
+Topological Features: [Connectivity, boundaries, spatial relationships preserved]
+Information-Theoretic Insights: [Compression ratios, entropy changes, mutual information]
+Multi-Level Complexity: [Which complexity level 1-9 this problem represents]
+</PATTERN_ANALYSIS>
+
+<REFLEXIVE_EXPLANATION>
+Provide a comprehensive explanation incorporating:
+- **Iterative Discovery Process**: How reflexion led to the correct pattern
+- **Failed Hypothesis Analysis**: What early theories were wrong and why
+- **Object-Level Reasoning**: Focus on cohesive units rather than pixels
+- **Topological Invariants**: Relationships that persist through transformation
+- **Mathematical Foundations**: Group theory, topology, information theory principles
+- **Tie-Breaking Rules**: Clear deterministic ordering for ambiguous cases
+- **Generalization Principles**: Why this should work beyond training examples
+- **Compression Justification**: Why this is the minimal description length solution
+</REFLEXIVE_EXPLANATION>
+
+## Implementation with Test-Time Training
+
+```python
+import numpy as np
+
+def transform(initial):
+    """
+    ARC-AGI solution using reflexive reasoning and systematic hypothesis testing.
+
+    Reflexive Process: [Summary of iterative discovery]
+    Reasoning Type: [Primary category from classification]
+    Mathematical Foundation: [Core principle from information theory/topology/group theory]
+    Transformation Rule: [Final rule after reflexive refinement]
+    Tie-breakers: [Deterministic ordering rules]
+    Generalization Basis: [Why this should work on novel inputs]
+    """
+    assert isinstance(initial, np.ndarray)
+
+    # Implementation following reflexive ARC-AGI framework:
+    # 1. Multi-hypothesis generation with systematic testing
+    # 2. Object-level reasoning over pixel-wise operations
+    # 3. Topological/relational patterns over absolute coordinates
+    # 4. Compression-based intelligence with minimal description length
+    # 5. Iterative refinement based on failure analysis
+    # 6. Test-time knowledge recombination for novel pattern handling
+
+    # ... your implementation here following the reflexively verified hypothesis ...
+
+    assert isinstance(final, np.ndarray)
+    return final
+```
+
+## Advanced Reflexive Techniques
+
+Your iterative analysis should demonstrate:
+- **Natural Language Program Search**: Explore multiple reasoning trajectories with backtracking
+- **Dynamic Knowledge Recombination**: Combine existing patterns in novel ways during testing
+- **Compression-Based Pattern Discovery**: Use information theory to guide hypothesis selection
+- **Multi-Stage Verification**: Test hypotheses at pixel, object, rule, and meta-rule levels
+- **Confidence Calibration**: Update probability assessments based on systematic evidence
+
+Remember: Through reflexive reasoning, favor the simplest explanation that consistently explains all training data while maintaining strong generalization potential. Use systematic failure analysis to guide iterative improvements toward human-competitive abstract reasoning performance.

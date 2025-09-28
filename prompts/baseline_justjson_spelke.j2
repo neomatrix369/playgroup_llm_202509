@@ -1,0 +1,122 @@
+You are a clever problem solving machine that uses Core Knowledge principles to analyze logical puzzles systematically. You need to describe what changes between several examples and implement a solution.
+
+## Core Knowledge Framework (Spelke-Informed Analysis)
+
+Ground your reasoning in these innate cognitive systems and note which apply to this problem:
+
+**Objectness and Elementary Physics:**
+- Cohesion (contiguity of regions), persistence, contact-based interaction
+- Invariants: connected components, boundaries, fills, growth/shrink by contact
+
+**Elementary Geometry and Topology:**
+- Relative position, adjacency, symmetry, reflection/rotation, connectivity, holes
+- Invariants: topological equivalence, symmetry conservation/breaking
+
+**Place System and Frames of Reference:**
+- Allocentric vs egocentric frames, grid axes, scan orders (row/column)
+- Invariants: relative order, alignment, axis orientation, stable reference frames
+
+**Natural Numbers and Elementary Arithmetic:**
+- Counts, ranks, orderings, parity/periodicity, simple mappings, frequency
+- Invariants: conserved counts, proportionality, ordinal rules
+
+**Form and Category Recognition:**
+- Grouping by shared properties, prototypes/exemplars, category stability under transforms
+- Invariants: category membership, feature-based grouping consistency
+
+**Analysis Bias and Tie-breaker Policy (apply in order):**
+1. Prefer relational/topological rules over absolute coordinates when both fit
+2. Prefer object cohesion and connectedness-based reasoning over pixel-wise lookup
+3. Prefer minimal description length (simpler rule that fits all training pairs)
+4. Use stable, data-supported tie-breakers: topmost, leftmost, earliest discovery
+5. Avoid arbitrary color lookups unless supported across all examples
+
+Problems will use prior knowledge that any good problem solver should know. This includes object persistence, goal-directedness, elementary counting, basic geometric and topological concepts such as connectivity and symmetry.
+
+In addition you may need to compose partial ideas together, so you need to observe different problem solutions that might be assembled into a sequence for a full solution. Some problems will require some symbolic understanding. You will need to consider the full context to create correct rules, look beyond the superficial interpretation.
+
+## Problem Examples
+
+You'll see input and output pairs for a grid of numbers as JSON dictionaries:
+
+{% set grid_method = make_grid_plain -%}
+{% for pattern_input_output in patterns_input_output %}
+Here is an example input and output pattern as a JSON dict:
+{{ pattern_input_output }}
+{% endfor -%}
+
+## Multi-Phase Analysis Required
+
+**Phase 1: Problem Category Hypothesis**
+Before trying to solve it, hypothesize what type of reasoning focus this problem belongs to.
+
+Use the following categories:
+- Color-based transformations
+- Shape recognition and manipulation
+- Symmetry and reflection
+- Object counting / repetition
+- Spatial relations / positioning
+- Pattern completion / continuation
+- Noise removal / denoising
+- Containment / enclosure
+- Arithmetic / logical operations on attributes
+
+**Phase 2: Core Knowledge Assessment**
+Identify which cognitive systems apply and how they manifest in the examples.
+
+**Phase 3: Pattern Recognition and Invariants**
+- Identify elements that remain constant across examples (counts, topology, alignments)
+- Identify transformations (color mappings, motions, growth/shrink, re-labeling)
+- Tag observations with Core Knowledge categories: [Objectness], [Geometry], [Place], [Number], [Form]
+
+**Phase 4: Rule Formation**
+Consider object cohesion, connectedness, topological relationships, and simple ordinal schemes. Look for the simplest rule that explains all training examples and would generalize to novel layouts and colors.
+
+Given the above examples, write your analysis in the following structured format:
+
+<PROBLEM_CATEGORY>
+- Categories that apply: [list one or more from the categories above]
+- Rationale: [short explanation of why these categories fit]
+</PROBLEM_CATEGORY>
+
+<CORE_KNOWLEDGE_ANALYSIS>
+- Objectness: [Brief assessment of object persistence, cohesion, contact interactions]
+- Geometry: [Brief assessment of spatial relationships, symmetries, topology]
+- Place: [Brief assessment of reference frames, scan orders, alignments]
+- Number: [Brief assessment of counting, ranking, arithmetic patterns]
+- Form: [Brief assessment of categorization, grouping by shared properties]
+- Primary Systems: [List the 1-2 most relevant systems for this problem]
+</CORE_KNOWLEDGE_ANALYSIS>
+
+<EXPLANATION>
+Write several bullet points that explain the rules that convert the input patterns to the output patterns. Focus on:
+- Object-level transformations rather than pixel-by-pixel changes
+- Topological and relational invariants
+- Clear tie-breaking rules for ambiguous cases (e.g., "process leftmost first", "largest object wins")
+- Why this rule should generalize beyond the training examples
+- Tag key insights with Core Knowledge categories [Objectness], [Geometry], [Place], [Number], [Form]
+</EXPLANATION>
+
+After this write a solution in Python code that follows the following format. You must accept an `initial` np.ndarray of numbers as input and return a `final` np.ndarray of numbers. Each number is in the range [0...9] and the grid is rectangular. The grid size of `final` may be different to the size of `initial`.
+
+```python
+import numpy as np
+
+def transform(initial):
+    """
+    Core Knowledge basis: [specify which systems from Objectness, Geometry, Place, Number, Form]
+    Rule: [one-line description of the transformation rule]
+    Tie-breakers: [specify any ordering/selection rules like "leftmost first", "largest object"]
+    """
+    assert isinstance(initial, np.ndarray)
+
+    # Implementation following Core Knowledge principles:
+    # - Focus on object cohesion and connectedness
+    # - Use topological/relational reasoning over absolute coordinates
+    # - Apply simple, generalizable rules with clear tie-breakers
+
+    # ... your implementation here ...
+
+    assert isinstance(final, np.ndarray)
+    return final
+```

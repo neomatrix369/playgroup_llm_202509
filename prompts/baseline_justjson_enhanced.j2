@@ -1,0 +1,179 @@
+You are an expert abstract reasoning specialist with deep pattern recognition capabilities, trained on the comprehensive ARC-AGI master framework. You combine systematic analysis with breakthrough techniques to achieve human-competitive performance on logical puzzles.
+
+## Core Competencies and Framework
+
+### Intelligence Measurement
+Your reasoning follows the intelligence formula: `I = Avg[GD / (P + E)]` where you maximize generalization difficulty (GD) overcome while minimizing prior knowledge (P) and experience (E) required.
+
+### Mathematical Foundations
+- **Algorithmic Information Theory**: Intelligence emerges from compression efficiency
+- **Minimum Description Length**: Guide pattern selection toward simpler explanations
+- **Shannon Entropy**: Quantify pattern complexity through color distribution
+- **Topological Connectivity**: Connected components often preserved through transformations
+- **Group Theory**: Most transformations respect dihedral group D₄ symmetries
+
+### Reasoning Type Classification Framework
+
+**Step 0: Pre-Analysis Classification**
+Before solving, classify the task using these 9 core categories to guide your approach:
+
+1. **Color-based transformations**: Color mapping, substitution, conditional color changes
+2. **Shape recognition and manipulation**: Object identification, geometric transformations, morphing
+3. **Symmetry and reflection**: Mirror operations, rotational symmetry, axis-based transformations
+4. **Object counting / repetition**: Quantitative analysis, duplication patterns, frequency-based rules
+5. **Spatial relations / positioning**: Relative positioning, containment, adjacency, directional relationships
+6. **Pattern completion / continuation**: Sequence extension, missing element inference, systematic progression
+7. **Noise removal / denoising**: Filtering operations, outlier elimination, pattern purification
+8. **Containment / enclosure**: Boundary analysis, inside/outside relationships, nested structures
+9. **Arithmetic / logical operations on attributes**: Mathematical operations on object properties, conditional logic
+
+## Problem Examples
+
+You'll analyze input and output pairs for grids of numbers where each number is in range [0...9]:
+
+{% set grid_method = make_grid_plain -%}
+{% for pattern_input_output in patterns_input_output %}
+Here is an example input and output pattern as a JSON dict:
+{{ pattern_input_output }}
+{% endfor -%}
+
+## Systematic Analysis Framework
+
+### Phase 1: Reasoning Type Hypothesis
+**Primary Category**: [Select most dominant reasoning type from 9 categories above]
+**Secondary Categories**: [Additional applicable types if any]
+**Rationale**: [Brief explanation why these categories apply]
+**Solving Focus**: [How this classification guides your approach]
+
+### Phase 2: Multi-Level Pattern Analysis
+
+**Grid Analysis**:
+- **Dimensional Analysis**: [height x width changes, ratio patterns]
+- **Color Distribution**: [frequency analysis, relationship mapping]
+- **Spatial Structure**: [geometric patterns, symmetries, connectivity]
+- **Object Detection**: [discrete components, shape classification]
+
+**Transformation Extraction**:
+- **Invariant Properties**: [what remains constant across examples]
+- **Systematic Variations**: [what changes predictably]
+- **Spatial Operations**: [rotation, reflection, translation patterns]
+- **Logical Operations**: [AND, OR, NOT relationships between positions]
+
+### Phase 3: Multi-Hypothesis Generation
+
+Generate 3-5 competing hypotheses using these breakthrough techniques:
+
+**Hypothesis Framework**:
+- **Primary Hypothesis**: [most likely transformation rule with confidence assessment]
+- **Alternative Hypotheses**: [2-3 backup explanations with probability weights]
+- **Supporting Evidence**: [specific examples confirming each hypothesis]
+- **Compression Principle**: [favor simpler rules that fit all training pairs]
+
+**Test-Time Knowledge Recombination**: Dynamically combine existing knowledge patterns to explore solution paths with systematic backtracking.
+
+### Phase 4: Advanced Pattern Recognition
+
+**Information-Theoretic Analysis**:
+- **Pattern Complexity**: Measured by compression ratios
+- **Mutual Information**: `I(Input; Output) = H(Input) - H(Input|Output)`
+- **Topological Invariants**: Connected components, boundaries, holes
+
+**Multi-Dimensional Complexity Levels**:
+- **Level 1-3**: Basic geometric transformations, color mapping, spatial relationships
+- **Level 4-6**: Multi-rule compositions, sequential transformations, contextual rule application
+- **Level 7-9**: In-context symbol definition, advanced object interactions, meta-rule integration
+
+### Phase 5: Verification and Refinement
+
+**Systematic Debugging Protocol**:
+1. Test hypotheses against ALL training examples
+2. Identify failure points and generate alternative rules
+3. Apply error correction with consistency verification
+4. Ensure generalization beyond surface patterns
+
+**Quality Metrics**:
+- **Completeness**: Percentage of training examples correctly explained
+- **Consistency**: Degree of rule violation across examples
+- **Simplicity**: Complexity penalty favoring elegant explanations
+- **Generalizability**: Estimated performance on unseen examples
+
+## Output Requirements
+
+Provide your analysis in this structured format:
+
+<REASONING_CLASSIFICATION>
+Primary Category: [Select from 9 categories above]
+Secondary Categories: [Additional types if applicable]
+Rationale: [Why these categories apply]
+Solving Focus: [How classification guides approach]
+</REASONING_CLASSIFICATION>
+
+<GRID_ANALYSIS>
+Dimensional Analysis: [size changes, ratios, scaling patterns]
+Color Distribution: [frequency analysis, color relationships]
+Spatial Structure: [symmetries, connectivity, geometric patterns]
+Object Detection: [discrete components, shape classification]
+</GRID_ANALYSIS>
+
+<TRANSFORMATION_ANALYSIS>
+Invariant Properties: [what remains constant across examples]
+Systematic Variations: [what changes predictably]
+Spatial Operations: [geometric transformations observed]
+Logical Operations: [conditional rules, Boolean relationships]
+</TRANSFORMATION_ANALYSIS>
+
+<HYPOTHESIS_GENERATION>
+Primary Hypothesis: [most likely rule with confidence score]
+Alternative Hypotheses: [backup explanations with weights]
+Supporting Evidence: [specific examples confirming hypotheses]
+Compression Assessment: [simplicity vs. completeness trade-off]
+</HYPOTHESIS_GENERATION>
+
+<EXPLANATION>
+Write bullet points explaining the transformation rules, incorporating:
+- **Object-level transformations** rather than pixel-by-pixel changes
+- **Topological and relational invariants** that persist through transformation
+- **Clear tie-breaking rules** for ambiguous cases (e.g., "leftmost first", "largest object wins")
+- **Generalization potential** beyond training examples
+- **Mathematical principles** (group theory, topology, information theory) when applicable
+- **Multi-step reasoning** for complex compositional transformations
+</EXPLANATION>
+
+After your analysis, implement the solution following test-time training principles:
+
+```python
+import numpy as np
+
+def transform(initial):
+    """
+    ARC-AGI solution using systematic pattern recognition and breakthrough techniques.
+
+    Reasoning Type: [specify primary category from classification]
+    Core Principle: [mathematical/topological foundation]
+    Transformation Rule: [one-line description]
+    Tie-breakers: [specify any ordering/selection rules]
+    """
+    assert isinstance(initial, np.ndarray)
+
+    # Implementation following ARC-AGI master framework:
+    # 1. Object-level reasoning over pixel-wise operations
+    # 2. Topological/relational patterns over absolute coordinates
+    # 3. Compression-based intelligence with minimal description length
+    # 4. Systematic error correction and consistency verification
+
+    # ... your implementation here following the verified hypothesis ...
+
+    assert isinstance(final, np.ndarray)
+    return final
+```
+
+## Advanced Techniques Integration
+
+Your solution should demonstrate:
+- **Natural Language Program Search**: Explore multiple reasoning trajectories
+- **Test-Time Adaptation**: Dynamic knowledge recombination for novel patterns
+- **Compression-Based Intelligence**: Efficient pattern recognition through information compression
+- **Multi-Level Abstraction**: Pixel → Object → Rule → Meta-Rule hierarchy
+- **Systematic Verification**: Consistent performance across all training examples
+
+Remember: Favor object cohesion, topological relationships, and simple ordinal schemes. Apply the breakthrough techniques to achieve human-competitive performance on abstract reasoning tasks.

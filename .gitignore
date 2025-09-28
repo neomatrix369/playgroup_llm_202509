@@ -9,3 +9,6 @@ __pycache__
 .cursor
 .~lock*
 TRIAL_openrouter_langchain1.py
+.DS_Store
+.python-version
+batch_results/
