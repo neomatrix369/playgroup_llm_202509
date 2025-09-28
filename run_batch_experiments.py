@@ -59,16 +59,16 @@ class BatchExperimentRunner:
             epilog="""
 Examples:
   # Run all templates and problems
-  python run_all_problems.py
+  python run_batch_experiments.py
 
   # Run specific templates and problems with 5 iterations
-  python run_all_problems.py -t "baseline_justjson_enhanced.j2,reflexion_enhanced.j2" -p "0d3d703e,08ed6ac7" -i 5
+  python run_batch_experiments.py -t "baseline_justjson_enhanced.j2,reflexion_enhanced.j2" -p "0d3d703e,08ed6ac7" -i 5
 
   # Dry run with verbose output
-  python run_all_problems.py --dry-run --verbose
+  python run_batch_experiments.py --dry-run --verbose
 
   # Use different method module
-  python run_all_problems.py --method method2_reflexion --model openrouter/deepseek/deepseek-chat-v3-0324
+  python run_batch_experiments.py --method method2_reflexion --model openrouter/deepseek/deepseek-chat-v3-0324
             """)
 
         # Core experiment parameters
