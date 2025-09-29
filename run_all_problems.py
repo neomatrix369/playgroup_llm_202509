@@ -262,12 +262,21 @@ Examples:
             print("\n✅ All pre-flight checks passed!")
             return True, []
 
+    def setup_experiment_without_argparse(self, experiment_folder: Path) -> Tuple[Any, str]:
+        """Setup experiment folder and database without re-parsing arguments."""
+        logger = utils.setup_logging(experiment_folder)
+        logger.info("Started experiment")
+        db_filename = utils.make_db(experiment_folder)
+        logger.info(f"Database created at: {db_filename}")
+        return logger, db_filename
+
     def run_single_experiment(
         self,
         template: str,
         problem: str,
         method_module: Any,
-        args: argparse.Namespace
+        args: argparse.Namespace,
+        experiment_folder: Path
     ) -> Tuple[List[Any], List[Any]]:
         """Run a single experiment with timing."""
         self.log_timestamp(f"Starting individual test: {template} + {problem}")
@@ -280,8 +289,8 @@ Examples:
         individual_start_time = time.time()
 
         try:
-            # Setup for this specific experiment
-            _, _, logger, _, db_filename, _ = do_first_setup()
+            # Setup for this specific experiment (without re-parsing arguments)
+            logger, db_filename = self.setup_experiment_without_argparse(experiment_folder)
 
             # Load the specific problem
             problems = utils.get_examples(problem)
@@ -1400,7 +1409,7 @@ Examples:
 
                 try:
                     llm_responses, rr_trains = self.run_single_experiment(
-                        template, problem, method_module, args
+                        template, problem, method_module, args, output_dir
                     )
 
                     # Collect LLM responses
