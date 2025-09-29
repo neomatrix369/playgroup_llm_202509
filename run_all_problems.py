@@ -42,6 +42,12 @@ from utils import do_first_setup
 from domain.value_objects import SuccessThresholds, DifficultyThresholds
 from analysis.performance_grader import PerformanceGrader
 from analysis.difficulty_classifier import DifficultyClassifier
+from analysis.statistics_aggregator import (
+    TemplateStatisticsAggregator,
+    ProblemStatisticsAggregator,
+    ExperimentStatisticsAggregator,
+    BestTemplateRecommender
+)
 
 
 class BatchExperimentRunner:
@@ -633,90 +639,19 @@ Examples:
         )
 
         # 2. Template ranking (average performance across all problems)
-        template_performance = {}
-        for result in self.results_data:
-            template = result['template']
-            if template not in template_performance:
-                template_performance[template] = {
-                    'results': [],
-                    'total_duration': 0,
-                    'problem_count': 0
-                }
-            template_performance[template]['results'].append(result)
-            template_performance[template]['total_duration'] += result['individual_duration']
-            template_performance[template]['problem_count'] += 1
-
-        template_ranking = []
-        for template, data in template_performance.items():
-            results = data['results']
-            avg_all_correct = sum(r['all_correct_rate'] for r in results) / len(results)
-            avg_partial = sum(r['at_least_one_correct_rate'] for r in results) / len(results)
-            excellent_count = len([r for r in results if r['all_correct_rate'] >= 0.8])
-            good_count = len([r for r in results if 0.5 <= r['all_correct_rate'] < 0.8])
-
-            template_ranking.append({
-                'template': template,
-                'avg_all_correct_rate': avg_all_correct,
-                'avg_partial_rate': avg_partial,
-                'excellent_problems': excellent_count,
-                'good_problems': good_count,
-                'total_problems': len(results),
-                'avg_duration': data['total_duration'] / data['problem_count'],
-                'score': avg_all_correct * 0.8 + avg_partial * 0.2  # Weighted score
-            })
-
-        template_ranking.sort(key=lambda x: x['score'], reverse=True)
+        # Refactored: Use TemplateStatisticsAggregator (eliminates duplication #6)
+        template_aggregator = TemplateStatisticsAggregator(self.results_data)
+        template_ranking = template_aggregator.aggregate_to_ranking()
 
         # 3. Problem difficulty analysis (average performance across all templates)
-        problem_performance = {}
-        for result in self.results_data:
-            problem = result['problem']
-            if problem not in problem_performance:
-                problem_performance[problem] = {'results': []}
-            problem_performance[problem]['results'].append(result)
-
-        problem_analysis = []
-        for problem, data in problem_performance.items():
-            results = data['results']
-            avg_all_correct = sum(r['all_correct_rate'] for r in results) / len(results)
-            avg_partial = sum(r['at_least_one_correct_rate'] for r in results) / len(results)
-            best_template = max(results, key=lambda x: x['all_correct_rate'])
-
-            # Use refactored classifier (eliminates duplication #4)
-            classifier = DifficultyClassifier()
-            difficulty = classifier.classify(avg_all_correct, avg_partial)
-
-            problem_analysis.append({
-                'problem': problem,
-                'difficulty': difficulty,
-                'avg_all_correct_rate': avg_all_correct,
-                'avg_partial_rate': avg_partial,
-                'best_template': best_template['template'],
-                'best_score': best_template['all_correct_rate'],
-                'template_count': len(results)
-            })
-
-        problem_analysis.sort(key=lambda x: x['avg_all_correct_rate'], reverse=True)
+        # Refactored: Use ProblemStatisticsAggregator (eliminates duplication #7)
+        problem_aggregator = ProblemStatisticsAggregator(self.results_data)
+        problem_analysis = problem_aggregator.aggregate_to_analysis()
 
         # 4. Best template recommendations per problem
-        best_template_per_problem = {}
-        for problem_data in problem_analysis:
-            problem = problem_data['problem']
-            problem_results = [r for r in self.results_data if r['problem'] == problem]
-            best_result = max(problem_results, key=lambda x: (x['all_correct_rate'], x['at_least_one_correct_rate']))
-
-            # Find alternative good templates
-            good_alternatives = [
-                r for r in problem_results
-                if r['all_correct_rate'] >= 0.5 and r['template'] != best_result['template']
-            ]
-            good_alternatives.sort(key=lambda x: x['all_correct_rate'], reverse=True)
-
-            best_template_per_problem[problem] = {
-                'best_template': best_result['template'],
-                'best_score': best_result['all_correct_rate'],
-                'alternatives': good_alternatives[:3]  # Top 3 alternatives
-            }
+        # Refactored: Use BestTemplateRecommender (eliminates duplication #8)
+        recommender = BestTemplateRecommender(self.results_data)
+        best_template_per_problem = recommender.recommend_all()
 
         return {
             'experiment_ranking': experiment_ranking,
@@ -902,67 +837,15 @@ Examples:
         self.results_data = original_results
 
         # Add aggregated statistics
-        template_stats = {}
-        problem_stats = {}
-        experiment_stats = {}
+        # Refactored: Use aggregator classes (eliminates duplication #9)
+        template_aggregator = TemplateStatisticsAggregator(all_results)
+        template_stats = template_aggregator.aggregate_to_dict()
 
-        for result in all_results:
-            template = result['template']
-            problem = result['problem']
-            experiment = f"{template}|{problem}"
+        problem_aggregator = ProblemStatisticsAggregator(all_results)
+        problem_stats = problem_aggregator.aggregate_to_dict()
 
-            # Template statistics
-            if template not in template_stats:
-                template_stats[template] = {
-                    'total_runs': 0,
-                    'success_rates': [],
-                    'durations': [],
-                    'experiments': 0
-                }
-            template_stats[template]['total_runs'] += 1
-            template_stats[template]['success_rates'].append(result.get('all_correct_rate', 0))
-            template_stats[template]['durations'].append(result.get('individual_duration', 0))
-            template_stats[template]['experiments'] += 1
-
-            # Problem statistics
-            if problem not in problem_stats:
-                problem_stats[problem] = {
-                    'total_runs': 0,
-                    'success_rates': [],
-                    'templates_used': set(),
-                    'experiments': 0
-                }
-            problem_stats[problem]['total_runs'] += 1
-            problem_stats[problem]['success_rates'].append(result.get('all_correct_rate', 0))
-            problem_stats[problem]['templates_used'].add(template)
-            problem_stats[problem]['experiments'] += 1
-
-            # Experiment combination statistics
-            if experiment not in experiment_stats:
-                experiment_stats[experiment] = {
-                    'runs': 0,
-                    'success_rates': [],
-                    'timestamps': []
-                }
-            experiment_stats[experiment]['runs'] += 1
-            experiment_stats[experiment]['success_rates'].append(result.get('all_correct_rate', 0))
-            experiment_stats[experiment]['timestamps'].append(result.get('experiment_timestamp', ''))
-
-        # Calculate aggregated metrics
-        for template_data in template_stats.values():
-            template_data['avg_success_rate'] = sum(template_data['success_rates']) / len(template_data['success_rates'])
-            template_data['max_success_rate'] = max(template_data['success_rates'])
-            template_data['avg_duration'] = sum(template_data['durations']) / len(template_data['durations'])
-
-        for problem_data in problem_stats.values():
-            problem_data['avg_success_rate'] = sum(problem_data['success_rates']) / len(problem_data['success_rates'])
-            problem_data['max_success_rate'] = max(problem_data['success_rates'])
-            problem_data['templates_used'] = list(problem_data['templates_used'])
-
-        for exp_data in experiment_stats.values():
-            exp_data['avg_success_rate'] = sum(exp_data['success_rates']) / len(exp_data['success_rates'])
-            exp_data['max_success_rate'] = max(exp_data['success_rates'])
-            exp_data['latest_run'] = max(exp_data['timestamps']) if exp_data['timestamps'] else ''
+        experiment_aggregator = ExperimentStatisticsAggregator(all_results)
+        experiment_stats = experiment_aggregator.aggregate_to_dict()
 
         return {
             'analysis': analysis,
