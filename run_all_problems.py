@@ -16,6 +16,7 @@ Merges functionality from run_batch_tests.sh and run_all_problems.py:
 import argparse
 import importlib
 import time
+import traceback
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -50,6 +51,9 @@ class BatchExperimentRunner:
         self.all_llm_responses: List[Any] = []
         self.global_start_time: float = 0
         self.global_end_time: float = 0
+        self.failed_experiments: List[Dict[str, Any]] = []
+        self.total_experiments_attempted: int = 0
+        self.log_file_handle = None
 
     def parse_arguments(self) -> argparse.Namespace:
         """Parse command line arguments with comprehensive options."""
@@ -100,6 +104,8 @@ Examples:
                           help="Verbose output")
         parser.add_argument("--summarise-experiments", action="store_true",
                           help="Analyze existing experiment results and generate/update summary statistics")
+        parser.add_argument("--fail-fast", action="store_true",
+                          help="Stop execution on first error (default: continue through all experiments)")
 
         return parser.parse_args()
 
@@ -181,10 +187,17 @@ Examples:
 
         return selected
 
-    def log_timestamp(self, message: str) -> None:
+    def log_timestamp(self, message: str, to_file_only: bool = False) -> None:
         """Log message with timestamp."""
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        print(f"🕒 [{timestamp}] {message}")
+        log_msg = f"🕒 [{timestamp}] {message}"
+
+        if not to_file_only:
+            print(log_msg)
+
+        if self.log_file_handle:
+            self.log_file_handle.write(log_msg + "\n")
+            self.log_file_handle.flush()
 
     def format_duration(self, seconds: float) -> str:
         """Format duration in human-readable format."""
@@ -200,6 +213,73 @@ Examples:
         else:
             return f"{secs}s"
 
+    def validate_prerequisites(self, templates_to_use: List[str], problems_to_use: List[str], method_module: Any, args: argparse.Namespace) -> Tuple[bool, List[str]]:
+        """Validate all prerequisites before starting experiments."""
+        errors = []
+
+        self.log_timestamp("🔍 Running pre-flight validation...")
+
+        # 1. Validate templates exist
+        print("  ✓ Checking templates...")
+        available_templates = self.discover_templates()
+        for template in templates_to_use:
+            if template not in available_templates:
+                errors.append(f"Template not found: {template}")
+            else:
+                print(f"    ✓ {template}")
+
+        # 2. Validate at least one problem can be loaded
+        print("  ✓ Checking problem data access...")
+        if problems_to_use:
+            try:
+                test_problem = utils.get_examples(problems_to_use[0])
+                if not test_problem:
+                    errors.append(f"Problem {problems_to_use[0]} loaded but returned empty data")
+                else:
+                    print(f"    ✓ Successfully loaded problem: {problems_to_use[0]}")
+                    print(f"      - Train examples: {len(test_problem.get('train', []))}")
+                    print(f"      - Test examples: {len(test_problem.get('test', []))}")
+            except Exception as e:
+                errors.append(f"Failed to load problem {problems_to_use[0]}: {str(e)}")
+
+        # 3. Validate method module has required function
+        print("  ✓ Checking method module...")
+        if not hasattr(method_module, 'run_experiment_for_iterations'):
+            errors.append(f"Method module missing 'run_experiment_for_iterations' function")
+        else:
+            print(f"    ✓ Method module loaded: {method_module.__file__}")
+
+        # 4. Test database setup
+        print("  ✓ Checking database setup...")
+        try:
+            _, _, logger, _, db_filename, _ = do_first_setup()
+            if not db_filename:
+                errors.append("Database setup failed - no database filename returned")
+            else:
+                print(f"    ✓ Database: {db_filename}")
+        except Exception as e:
+            errors.append(f"Database setup failed: {str(e)}")
+
+        # 5. Validate API access (if not dry-run)
+        if not args.dry_run:
+            print("  ✓ Checking API configuration...")
+            try:
+                from litellm_helper import check_litellm_key
+                # This will raise an exception if API key is not configured
+                check_litellm_key(args)
+                print(f"    ✓ API key configured for model: {args.model}")
+            except Exception as e:
+                errors.append(f"API configuration issue: {str(e)}")
+
+        if errors:
+            print("\n❌ PRE-FLIGHT VALIDATION FAILED:")
+            for error in errors:
+                print(f"   ✗ {error}")
+            return False, errors
+        else:
+            print("\n✅ All pre-flight checks passed!")
+            return True, []
+
     def run_single_experiment(
         self,
         template: str,
@@ -209,6 +289,7 @@ Examples:
     ) -> Tuple[List[Any], List[Any]]:
         """Run a single experiment with timing."""
         self.log_timestamp(f"Starting individual test: {template} + {problem}")
+        self.total_experiments_attempted += 1
 
         if args.dry_run:
             print(f"[DRY-RUN] Would run {template} with {problem}")
@@ -226,6 +307,10 @@ Examples:
             # Set logger for the method module
             method_module.logger = logger
 
+            # Print iteration progress header
+            print(f"    🔄 Running {args.iterations} iteration(s)...")
+            iteration_start_time = time.time()
+
             # Run the experiment
             llm_responses, rr_trains = method_module.run_experiment_for_iterations(
                 db_filename,
@@ -234,6 +319,14 @@ Examples:
                 problems=problems,
                 template_name=template,
             )
+
+            iteration_end_time = time.time()
+            iteration_duration = iteration_end_time - iteration_start_time
+
+            # Show iteration timing summary
+            avg_per_iteration = iteration_duration / args.iterations if args.iterations > 0 else 0
+            print(f"    ✓ Completed {args.iterations} iteration(s) in {self.format_duration(iteration_duration)}")
+            print(f"      (avg: {self.format_duration(avg_per_iteration)} per iteration)")
 
             individual_end_time = time.time()
             individual_duration = individual_end_time - individual_start_time
@@ -253,8 +346,27 @@ Examples:
             # Store timing even for failures
             self.individual_timings[f"{template}|{problem}"] = individual_duration
 
+            # Record the failure
+            self.failed_experiments.append({
+                'template': template,
+                'problem': problem,
+                'error': str(e),
+                'duration': individual_duration,
+                'traceback': traceback.format_exc() if args.verbose else None
+            })
+
             formatted_duration = self.format_duration(individual_duration)
             self.log_timestamp(f"Individual test failed after {formatted_duration}: {str(e)}")
+
+            # Log full traceback to file
+            if self.log_file_handle:
+                self.log_file_handle.write(f"\n{'='*60}\n")
+                self.log_file_handle.write(f"FAILURE: {template} + {problem}\n")
+                self.log_file_handle.write(f"Error: {str(e)}\n")
+                self.log_file_handle.write(f"{'='*60}\n")
+                self.log_file_handle.write(traceback.format_exc())
+                self.log_file_handle.write(f"\n{'='*60}\n\n")
+                self.log_file_handle.flush()
 
             raise e
 
@@ -891,6 +1003,49 @@ Examples:
             'total_experiments': len(all_experiments)
         }
 
+    def _generate_failure_summary(self) -> None:
+        """Generate and print failure summary."""
+        if not self.failed_experiments:
+            return
+
+        print(f"\n{'='*80}")
+        print(f"⚠️  FAILURE SUMMARY ⚠️")
+        print(f"{'='*80}")
+        print(f"Total experiments attempted: {self.total_experiments_attempted}")
+        print(f"Failed experiments: {len(self.failed_experiments)}")
+        print(f"Success rate: {(self.total_experiments_attempted - len(self.failed_experiments)) / self.total_experiments_attempted:.1%}")
+        print(f"\n📋 Failed Experiment Details:")
+        print("─" * 70)
+
+        for i, failure in enumerate(self.failed_experiments, 1):
+            print(f"\n❌ Failure #{i}:")
+            print(f"   Template: {failure['template']}")
+            print(f"   Problem: {failure['problem']}")
+            print(f"   Error: {failure['error']}")
+            print(f"   Duration: {self.format_duration(failure['duration'])}")
+
+        print(f"\n{'='*80}")
+
+        # Also log to file if available
+        if self.log_file_handle:
+            self.log_file_handle.write(f"\n{'='*80}\n")
+            self.log_file_handle.write("FAILURE SUMMARY\n")
+            self.log_file_handle.write(f"{'='*80}\n")
+            self.log_file_handle.write(f"Total experiments attempted: {self.total_experiments_attempted}\n")
+            self.log_file_handle.write(f"Failed experiments: {len(self.failed_experiments)}\n\n")
+
+            for i, failure in enumerate(self.failed_experiments, 1):
+                self.log_file_handle.write(f"\nFailure #{i}:\n")
+                self.log_file_handle.write(f"  Template: {failure['template']}\n")
+                self.log_file_handle.write(f"  Problem: {failure['problem']}\n")
+                self.log_file_handle.write(f"  Error: {failure['error']}\n")
+                self.log_file_handle.write(f"  Duration: {self.format_duration(failure['duration'])}\n")
+                if failure.get('traceback'):
+                    self.log_file_handle.write(f"\nTraceback:\n{failure['traceback']}\n")
+
+            self.log_file_handle.write(f"\n{'='*80}\n\n")
+            self.log_file_handle.flush()
+
     def generate_persistent_summary(self, base_output_dir: Path, aggregated_data: Dict[str, Any]) -> List[str]:
         """Generate persistent summary files that aggregate all experiments."""
         if not aggregated_data:
@@ -1191,13 +1346,19 @@ Examples:
         print("─" * 50)
         self.log_timestamp(f"✅ Configuration complete. Starting {total_combinations} test combinations.")
 
-        # Create timestamp-based output directory
+        # Create timestamp-based output directory and setup logging
         base_output_dir = Path(args.output_dir)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir = base_output_dir / timestamp
         if not args.dry_run:
             output_dir.mkdir(parents=True, exist_ok=True)
             print(f"\n💾 Results will be saved to: {output_dir}")
+
+            # Setup log file
+            log_file = output_dir / f"experiment_run_{timestamp}.log"
+            self.log_file_handle = open(log_file, 'w')
+            self.log_timestamp(f"Logging to: {log_file}")
+            print(f"📝 Detailed log: {log_file.name}")
 
         # Load method module
         if not args.dry_run:
@@ -1207,9 +1368,31 @@ Examples:
                 print(f"Using entry point: {method_module.run_experiment_for_iterations.__name__}")
             except ImportError as e:
                 print(f"Error importing method module '{args.method}': {e}")
+                if self.log_file_handle:
+                    self.log_file_handle.close()
                 return
         else:
             method_module = None
+
+        # Run pre-flight validation
+        print(f"\n{'='*80}")
+        print("🔍 PRE-FLIGHT VALIDATION")
+        print(f"{'='*80}")
+
+        validation_passed, validation_errors = self.validate_prerequisites(
+            templates_to_use, problems_to_use, method_module, args
+        )
+
+        if not validation_passed:
+            print(f"\n❌ Cannot proceed with experiments due to validation failures")
+            if self.log_file_handle:
+                self.log_file_handle.write("\nValidation failed:\n")
+                for error in validation_errors:
+                    self.log_file_handle.write(f"  - {error}\n")
+                self.log_file_handle.close()
+            return
+
+        print(f"{'='*80}\n")
 
         # Execute experiments with branching timing
         current_test = 0
@@ -1257,10 +1440,22 @@ Examples:
                         print("  ✓ Test Completed" if args.dry_run else "  ❌ Poor Results")
 
                 except Exception as e:
-                    print(f"  ✗ Failed: {str(e)}")
+                    print(f"\n  ❌ EXPERIMENT FAILED: {str(e)}")
+                    print(f"     Template: {template}")
+                    print(f"     Problem: {problem}")
+
+                    # Always show traceback in verbose mode or when logging to file
                     if args.verbose:
-                        import traceback
                         traceback.print_exc()
+
+                    # If fail-fast is enabled, stop execution
+                    if args.fail_fast:
+                        print(f"\n❌ Stopping execution due to --fail-fast flag")
+                        print(f"   Failed on test {current_test}/{total_combinations}")
+                        print(f"   Template: {template}, Problem: {problem}")
+                        # Generate failure summary before exiting
+                        self._generate_failure_summary()
+                        return
 
                 # Problem-level timing summary
                 problem_end_time = time.time()
@@ -1413,7 +1608,19 @@ Examples:
             print(f"    📈 Total tokens: {sum(token_usages):,}")
 
         print("=" * 75)
-        self.log_timestamp("🎉 EXPERIMENT COMPLETED SUCCESSFULLY! 🎉")
+        self.log_timestamp("🎉 EXPERIMENT COMPLETED! 🎉")
+
+        # Generate failure summary if there were any failures
+        if self.failed_experiments:
+            self._generate_failure_summary()
+
+        # Close log file
+        if self.log_file_handle:
+            self.log_file_handle.write(f"\n{'='*80}\n")
+            self.log_file_handle.write("EXPERIMENT COMPLETED\n")
+            self.log_file_handle.write(f"{'='*80}\n")
+            self.log_file_handle.close()
+            self.log_file_handle = None
 
 
 def main():
@@ -1427,12 +1634,22 @@ def main():
         else:
             runner.run_batch_experiments(args)
     except KeyboardInterrupt:
-        print("\n\nExperiment interrupted by user")
+        print("\n\n⚠️  Experiment interrupted by user")
+        if runner.failed_experiments:
+            runner._generate_failure_summary()
+        if runner.log_file_handle:
+            runner.log_file_handle.write("\n\nEXPERIMENT INTERRUPTED BY USER\n")
+            runner.log_file_handle.close()
     except Exception as e:
-        print(f"\nExperiment failed with error: {str(e)}")
+        print(f"\n❌ Experiment failed with error: {str(e)}")
         if args.verbose:
-            import traceback
             traceback.print_exc()
+        if runner.failed_experiments:
+            runner._generate_failure_summary()
+        if runner.log_file_handle:
+            runner.log_file_handle.write(f"\n\nEXPERIMENT FAILED: {str(e)}\n")
+            runner.log_file_handle.write(traceback.format_exc())
+            runner.log_file_handle.close()
 
 
 if __name__ == "__main__":
