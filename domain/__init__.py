@@ -6,10 +6,18 @@ from domain.value_objects import (
     DifficultyLevel,
     ExperimentResult
 )
+from domain.stats_models import (
+    TemplateStats,
+    ProblemStats,
+    ExperimentStats
+)
 
 __all__ = [
     'SuccessThresholds',
     'DifficultyThresholds',
     'DifficultyLevel',
-    'ExperimentResult'
+    'ExperimentResult',
+    'TemplateStats',
+    'ProblemStats',
+    'ExperimentStats'
 ]
