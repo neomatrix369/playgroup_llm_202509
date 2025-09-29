@@ -38,6 +38,11 @@ except ImportError:
 import utils
 from utils import do_first_setup
 
+# Refactored classes to eliminate duplication
+from domain.value_objects import SuccessThresholds, DifficultyThresholds
+from analysis.performance_grader import PerformanceGrader
+from analysis.difficulty_classifier import DifficultyClassifier
+
 
 class BatchExperimentRunner:
     """Main class for running batch experiments with comprehensive tracking."""
@@ -458,21 +463,13 @@ Examples:
         print("─" * 95)
 
         # Data rows with visual indicators
+        grader = PerformanceGrader()
         for result in self.results_data:
             template_short = result['template'][:35] + "..." if len(result['template']) > 35 else result['template']
             test_time = self.format_duration(result['individual_duration'])
 
-            # Determine grade emoji
-            if result['all_correct_rate'] >= 0.8:
-                grade = "🎯 A"
-            elif result['all_correct_rate'] >= 0.6:
-                grade = "✅ B"
-            elif result['all_correct_rate'] >= 0.4:
-                grade = "⚠️ C"
-            elif result['at_least_one_correct_rate'] >= 0.5:
-                grade = "🔶 D"
-            else:
-                grade = "❌ F"
+            # Use refactored grader (eliminates duplication #1)
+            grade = grader.grade_with_icon(result['all_correct_rate'])
 
             print(f"{template_short:<40} {result['problem']:<12} {result['all_correct_rate']:<7.1%} "
                   f"{result['at_least_one_correct_rate']:<8.1%} {test_time:<10} {grade:<8}")
@@ -513,20 +510,9 @@ Examples:
             problem_difficulties = {r['problem']: r['difficulty'] for r in analysis['problem_analysis']}
             df['problem_difficulty'] = df['problem'].map(problem_difficulties)
 
-            # Add grade based on performance
-            def get_grade(rate):
-                if rate >= 0.8:
-                    return "A"
-                elif rate >= 0.6:
-                    return "B"
-                elif rate >= 0.4:
-                    return "C"
-                elif rate >= 0.2:
-                    return "D"
-                else:
-                    return "F"
-
-            df['performance_grade'] = df['all_correct_rate'].apply(get_grade)
+            # Add grade based on performance (use refactored grader, eliminates duplication #2)
+            grader = PerformanceGrader()
+            df['performance_grade'] = df['all_correct_rate'].apply(grader.grade)
 
         # Use the output directory name as timestamp for consistency
         timestamp = output_dir.name
@@ -696,15 +682,9 @@ Examples:
             avg_partial = sum(r['at_least_one_correct_rate'] for r in results) / len(results)
             best_template = max(results, key=lambda x: x['all_correct_rate'])
 
-            # Determine difficulty
-            if avg_all_correct >= 0.7:
-                difficulty = "EASY"
-            elif avg_all_correct >= 0.4:
-                difficulty = "MEDIUM"
-            elif avg_partial >= 0.5:
-                difficulty = "HARD"
-            else:
-                difficulty = "VERY_HARD"
+            # Use refactored classifier (eliminates duplication #4)
+            classifier = DifficultyClassifier()
+            difficulty = classifier.classify(avg_all_correct, avg_partial)
 
             problem_analysis.append({
                 'problem': problem,
@@ -1108,16 +1088,17 @@ Examples:
         # 3. Problem performance analysis (CSV)
         if pd is not None and aggregated_data['problem_stats']:
             problem_trends_data = []
+            classifier = DifficultyClassifier()
             for problem, stats in aggregated_data['problem_stats'].items():
+                # Use refactored classifier (eliminates duplication #5)
+                difficulty = classifier.classify_simple(stats['avg_success_rate'])
                 problem_trends_data.append({
                     'problem': problem,
                     'total_experiments': stats['experiments'],
                     'avg_success_rate': stats['avg_success_rate'],
                     'max_success_rate': stats['max_success_rate'],
                     'templates_tested': len(stats['templates_used']),
-                    'difficulty_rating': 'EASY' if stats['avg_success_rate'] >= 0.7 else
-                                       'MEDIUM' if stats['avg_success_rate'] >= 0.4 else
-                                       'HARD' if stats['avg_success_rate'] >= 0.2 else 'VERY_HARD'
+                    'difficulty_rating': difficulty
                 })
 
             problem_df = pd.DataFrame(problem_trends_data)
@@ -1270,8 +1251,10 @@ Examples:
             f.write("📊 INDIVIDUAL TEST RESULTS:\n")
             f.write("─" * 40 + "\n")
 
+            grader = PerformanceGrader()
             for i, result in enumerate(self.results_data, 1):
-                success_icon = "🎯" if result['all_correct_rate'] >= 0.8 else "✅" if result['all_correct_rate'] >= 0.5 else "⚠️" if result['at_least_one_correct_rate'] >= 0.5 else "❌"
+                # Use refactored grader (eliminates duplication #3)
+                success_icon = grader.success_icon(result['all_correct_rate'], result['at_least_one_correct_rate'])
                 f.write(f"{success_icon} Test {i:02d}: {result['template']} + {result['problem']}\n")
                 f.write(f"    📊 Results: {result['all_correct']}/{result['total_runs']} all correct ({result['all_correct_rate']:.1%}), ")
                 f.write(f"{result['at_least_one_correct']}/{result['total_runs']} partial ({result['at_least_one_correct_rate']:.1%})\n")
