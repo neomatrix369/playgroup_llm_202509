@@ -371,7 +371,7 @@ Examples:
         print("═" * 95)
 
     def generate_csv_output(self, output_dir: Path) -> str:
-        """Generate CSV output file."""
+        """Generate CSV output file with ranking data."""
         if not self.results_data:
             return ""
 
@@ -379,17 +379,66 @@ Examples:
             print("Warning: pandas not available, skipping CSV output")
             return ""
 
+        # Main results data
         df = pd.DataFrame(self.results_data)
 
         # Add timing columns
         df['individual_duration_formatted'] = df['individual_duration'].apply(self.format_duration)
         df['problem_duration_formatted'] = df['problem_duration'].apply(self.format_duration)
 
+        # Add ranking information
+        analysis = self.generate_ranking_analysis()
+        if analysis:
+            # Add experiment rank
+            experiment_rankings = {f"{r['template']}|{r['problem']}": i+1
+                                 for i, r in enumerate(analysis['experiment_ranking'])}
+            df['experiment_rank'] = df.apply(lambda row: experiment_rankings.get(f"{row['template']}|{row['problem']}", 0), axis=1)
+
+            # Add template rank
+            template_rankings = {r['template']: i+1 for i, r in enumerate(analysis['template_ranking'])}
+            df['template_rank'] = df['template'].map(template_rankings)
+
+            # Add problem difficulty
+            problem_difficulties = {r['problem']: r['difficulty'] for r in analysis['problem_analysis']}
+            df['problem_difficulty'] = df['problem'].map(problem_difficulties)
+
+            # Add grade based on performance
+            def get_grade(rate):
+                if rate >= 0.8:
+                    return "A"
+                elif rate >= 0.6:
+                    return "B"
+                elif rate >= 0.4:
+                    return "C"
+                elif rate >= 0.2:
+                    return "D"
+                else:
+                    return "F"
+
+            df['performance_grade'] = df['all_correct_rate'].apply(get_grade)
+
         # Use the output directory name as timestamp for consistency
         timestamp = output_dir.name
         csv_file = output_dir / f"batch_results_{timestamp}.csv"
 
+        # Sort by experiment rank for better readability
+        if 'experiment_rank' in df.columns:
+            df = df.sort_values('experiment_rank')
+
         df.to_csv(csv_file, index=False)
+
+        # Also generate separate ranking files
+        if analysis:
+            # Template ranking CSV
+            template_df = pd.DataFrame(analysis['template_ranking'])
+            template_csv = output_dir / f"template_ranking_{timestamp}.csv"
+            template_df.to_csv(template_csv, index=False)
+
+            # Problem analysis CSV
+            problem_df = pd.DataFrame(analysis['problem_analysis'])
+            problem_csv = output_dir / f"problem_analysis_{timestamp}.csv"
+            problem_df.to_csv(problem_csv, index=False)
+
         return str(csv_file)
 
     def generate_html_output(self, output_dir: Path) -> str:
@@ -473,6 +522,219 @@ Examples:
 
         html_file.write_text(html_content)
         return str(html_file)
+
+    def generate_ranking_analysis(self) -> Dict[str, Any]:
+        """Generate comprehensive ranking and best-performance analysis."""
+        if not self.results_data:
+            return {}
+
+        # 1. Experiment ranking (template+problem combinations)
+        experiment_ranking = sorted(
+            self.results_data,
+            key=lambda x: (x['all_correct_rate'], x['at_least_one_correct_rate']),
+            reverse=True
+        )
+
+        # 2. Template ranking (average performance across all problems)
+        template_performance = {}
+        for result in self.results_data:
+            template = result['template']
+            if template not in template_performance:
+                template_performance[template] = {
+                    'results': [],
+                    'total_duration': 0,
+                    'problem_count': 0
+                }
+            template_performance[template]['results'].append(result)
+            template_performance[template]['total_duration'] += result['individual_duration']
+            template_performance[template]['problem_count'] += 1
+
+        template_ranking = []
+        for template, data in template_performance.items():
+            results = data['results']
+            avg_all_correct = sum(r['all_correct_rate'] for r in results) / len(results)
+            avg_partial = sum(r['at_least_one_correct_rate'] for r in results) / len(results)
+            excellent_count = len([r for r in results if r['all_correct_rate'] >= 0.8])
+            good_count = len([r for r in results if 0.5 <= r['all_correct_rate'] < 0.8])
+
+            template_ranking.append({
+                'template': template,
+                'avg_all_correct_rate': avg_all_correct,
+                'avg_partial_rate': avg_partial,
+                'excellent_problems': excellent_count,
+                'good_problems': good_count,
+                'total_problems': len(results),
+                'avg_duration': data['total_duration'] / data['problem_count'],
+                'score': avg_all_correct * 0.8 + avg_partial * 0.2  # Weighted score
+            })
+
+        template_ranking.sort(key=lambda x: x['score'], reverse=True)
+
+        # 3. Problem difficulty analysis (average performance across all templates)
+        problem_performance = {}
+        for result in self.results_data:
+            problem = result['problem']
+            if problem not in problem_performance:
+                problem_performance[problem] = {'results': []}
+            problem_performance[problem]['results'].append(result)
+
+        problem_analysis = []
+        for problem, data in problem_performance.items():
+            results = data['results']
+            avg_all_correct = sum(r['all_correct_rate'] for r in results) / len(results)
+            avg_partial = sum(r['at_least_one_correct_rate'] for r in results) / len(results)
+            best_template = max(results, key=lambda x: x['all_correct_rate'])
+
+            # Determine difficulty
+            if avg_all_correct >= 0.7:
+                difficulty = "EASY"
+            elif avg_all_correct >= 0.4:
+                difficulty = "MEDIUM"
+            elif avg_partial >= 0.5:
+                difficulty = "HARD"
+            else:
+                difficulty = "VERY_HARD"
+
+            problem_analysis.append({
+                'problem': problem,
+                'difficulty': difficulty,
+                'avg_all_correct_rate': avg_all_correct,
+                'avg_partial_rate': avg_partial,
+                'best_template': best_template['template'],
+                'best_score': best_template['all_correct_rate'],
+                'template_count': len(results)
+            })
+
+        problem_analysis.sort(key=lambda x: x['avg_all_correct_rate'], reverse=True)
+
+        # 4. Best template recommendations per problem
+        best_template_per_problem = {}
+        for problem_data in problem_analysis:
+            problem = problem_data['problem']
+            problem_results = [r for r in self.results_data if r['problem'] == problem]
+            best_result = max(problem_results, key=lambda x: (x['all_correct_rate'], x['at_least_one_correct_rate']))
+
+            # Find alternative good templates
+            good_alternatives = [
+                r for r in problem_results
+                if r['all_correct_rate'] >= 0.5 and r['template'] != best_result['template']
+            ]
+            good_alternatives.sort(key=lambda x: x['all_correct_rate'], reverse=True)
+
+            best_template_per_problem[problem] = {
+                'best_template': best_result['template'],
+                'best_score': best_result['all_correct_rate'],
+                'alternatives': good_alternatives[:3]  # Top 3 alternatives
+            }
+
+        return {
+            'experiment_ranking': experiment_ranking,
+            'template_ranking': template_ranking,
+            'problem_analysis': problem_analysis,
+            'best_template_per_problem': best_template_per_problem
+        }
+
+    def generate_ranking_report(self, output_dir: Path, timestamp: str) -> str:
+        """Generate comprehensive ranking and analysis report."""
+        if not self.results_data:
+            return ""
+
+        analysis = self.generate_ranking_analysis()
+        if not analysis:
+            return ""
+
+        ranking_file = output_dir / f"ranking_analysis_{timestamp}.log"
+
+        with open(ranking_file, 'w') as f:
+            f.write("=" * 80 + "\n")
+            f.write("🏆  COMPREHENSIVE RANKING & PERFORMANCE ANALYSIS  🏆\n")
+            f.write("=" * 80 + "\n\n")
+
+            # 1. Top performing experiments
+            f.write("🥇 TOP PERFORMING EXPERIMENTS (Template + Problem Combinations):\n")
+            f.write("─" * 70 + "\n")
+            for i, result in enumerate(analysis['experiment_ranking'][:10], 1):
+                grade = "🎯" if result['all_correct_rate'] >= 0.8 else "✅" if result['all_correct_rate'] >= 0.6 else "⚠️"
+                f.write(f"{grade} #{i:2d}: {result['template'][:35]:35s} + {result['problem']}\n")
+                f.write(f"      📊 {result['all_correct_rate']:6.1%} all correct, {result['at_least_one_correct_rate']:6.1%} partial\n")
+                f.write(f"      ⏱️  {self.format_duration(result['individual_duration'])}\n\n")
+
+            # 2. Template ranking
+            f.write("=" * 80 + "\n")
+            f.write("📝 TEMPLATE RANKING (Overall Performance Across All Problems):\n")
+            f.write("─" * 70 + "\n")
+            for i, template_data in enumerate(analysis['template_ranking'], 1):
+                grade = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📊"
+                f.write(f"{grade} #{i}: {template_data['template']}\n")
+                f.write(f"    📊 Average: {template_data['avg_all_correct_rate']:6.1%} all correct, {template_data['avg_partial_rate']:6.1%} partial\n")
+                f.write(f"    🎯 Excellent problems: {template_data['excellent_problems']}/{template_data['total_problems']} ({template_data['excellent_problems']/template_data['total_problems']:.1%})\n")
+                f.write(f"    ✅ Good problems: {template_data['good_problems']}/{template_data['total_problems']} ({template_data['good_problems']/template_data['total_problems']:.1%})\n")
+                f.write(f"    ⏱️  Average duration: {self.format_duration(template_data['avg_duration'])}\n")
+                f.write(f"    📈 Weighted score: {template_data['score']:.3f}\n\n")
+
+            # 3. Problem difficulty analysis
+            f.write("=" * 80 + "\n")
+            f.write("🎯 PROBLEM DIFFICULTY ANALYSIS:\n")
+            f.write("─" * 70 + "\n")
+
+            difficulty_groups = {}
+            for problem_data in analysis['problem_analysis']:
+                difficulty = problem_data['difficulty']
+                if difficulty not in difficulty_groups:
+                    difficulty_groups[difficulty] = []
+                difficulty_groups[difficulty].append(problem_data)
+
+            for difficulty in ['EASY', 'MEDIUM', 'HARD', 'VERY_HARD']:
+                if difficulty in difficulty_groups:
+                    problems = difficulty_groups[difficulty]
+                    f.write(f"🌟 {difficulty} Problems ({len(problems)}):\n")
+                    for problem_data in problems:
+                        difficulty_icon = "🟢" if difficulty == "EASY" else "🟡" if difficulty == "MEDIUM" else "🟠" if difficulty == "HARD" else "🔴"
+                        f.write(f"  {difficulty_icon} {problem_data['problem']}: {problem_data['avg_all_correct_rate']:6.1%} avg success\n")
+                        f.write(f"     🏆 Best template: {problem_data['best_template'][:40]:40s} ({problem_data['best_score']:6.1%})\n")
+                    f.write("\n")
+
+            # 4. Best template recommendations
+            f.write("=" * 80 + "\n")
+            f.write("🎯 OPTIMAL TEMPLATE RECOMMENDATIONS PER PROBLEM:\n")
+            f.write("─" * 70 + "\n")
+            for problem, recommendation in analysis['best_template_per_problem'].items():
+                f.write(f"🎲 Problem: {problem}\n")
+                f.write(f"   🏆 Best: {recommendation['best_template'][:50]:50s} ({recommendation['best_score']:6.1%})\n")
+                if recommendation['alternatives']:
+                    f.write(f"   📋 Alternatives:\n")
+                    for alt in recommendation['alternatives']:
+                        f.write(f"      • {alt['template'][:45]:45s} ({alt['all_correct_rate']:6.1%})\n")
+                f.write("\n")
+
+            # 5. Comparative analysis summary
+            f.write("=" * 80 + "\n")
+            f.write("📊 COMPARATIVE ANALYSIS SUMMARY:\n")
+            f.write("─" * 70 + "\n")
+
+            best_template = analysis['template_ranking'][0]
+            worst_template = analysis['template_ranking'][-1]
+            easiest_problem = analysis['problem_analysis'][0]
+            hardest_problem = analysis['problem_analysis'][-1]
+
+            f.write(f"🏆 Best Overall Template: {best_template['template']}\n")
+            f.write(f"   📊 Average success rate: {best_template['avg_all_correct_rate']:.1%}\n")
+            f.write(f"   🎯 Excellent on {best_template['excellent_problems']}/{best_template['total_problems']} problems\n\n")
+
+            f.write(f"⚠️  Most Challenging Template: {worst_template['template']}\n")
+            f.write(f"   📊 Average success rate: {worst_template['avg_all_correct_rate']:.1%}\n\n")
+
+            f.write(f"🟢 Easiest Problem: {easiest_problem['problem']}\n")
+            f.write(f"   📊 Average success rate: {easiest_problem['avg_all_correct_rate']:.1%}\n")
+            f.write(f"   🏆 Best template: {easiest_problem['best_template']}\n\n")
+
+            f.write(f"🔴 Hardest Problem: {hardest_problem['problem']}\n")
+            f.write(f"   📊 Average success rate: {hardest_problem['avg_all_correct_rate']:.1%}\n")
+            f.write(f"   🏆 Best template: {hardest_problem['best_template']}\n\n")
+
+            f.write("=" * 80 + "\n")
+
+        return str(ranking_file)
 
     def generate_summary_log(self, output_dir: Path, timestamp: str, total_duration: float, templates_to_use: list, problems_to_use: list, total_combinations: int) -> str:
         """Generate detailed summary log file."""
@@ -689,9 +951,41 @@ Examples:
         if not args.dry_run and self.results_data:
             self.generate_console_table()
 
+            # Generate ranking analysis and show key insights
+            analysis = self.generate_ranking_analysis()
+            if analysis:
+                print(f"\n🏆 " + "=" * 70)
+                print(f"🎯 KEY INSIGHTS & RANKINGS")
+                print("=" * 75)
+
+                # Best template overall
+                best_template = analysis['template_ranking'][0]
+                print(f"🥇 Best Overall Template: {best_template['template']}")
+                print(f"   📊 Average success: {best_template['avg_all_correct_rate']:.1%} all correct")
+                print(f"   🎯 Excellent on {best_template['excellent_problems']}/{best_template['total_problems']} problems")
+
+                # Top 3 experiments
+                print(f"\n🌟 Top 3 Performing Experiments:")
+                for i, result in enumerate(analysis['experiment_ranking'][:3], 1):
+                    grade = "🎯" if result['all_correct_rate'] >= 0.8 else "✅" if result['all_correct_rate'] >= 0.6 else "⚠️"
+                    template_short = result['template'][:30] + "..." if len(result['template']) > 30 else result['template']
+                    print(f"   {grade} #{i}: {template_short} + {result['problem']} ({result['all_correct_rate']:.1%})")
+
+                # Problem difficulty insights
+                easy_problems = [p for p in analysis['problem_analysis'] if p['difficulty'] == 'EASY']
+                hard_problems = [p for p in analysis['problem_analysis'] if p['difficulty'] in ['HARD', 'VERY_HARD']]
+
+                if easy_problems:
+                    print(f"\n🟢 Easiest Problems: {', '.join([p['problem'] for p in easy_problems[:3]])}")
+                if hard_problems:
+                    print(f"🔴 Hardest Problems: {', '.join([p['problem'] for p in hard_problems[:3]])}")
+
+                print("=" * 75)
+
             csv_file = self.generate_csv_output(output_dir)
             html_file = self.generate_html_output(output_dir)
             summary_log = self.generate_summary_log(output_dir, timestamp, total_duration, templates_to_use, problems_to_use, total_combinations)
+            ranking_report = self.generate_ranking_report(output_dir, timestamp)
 
             print(f"\n💾 " + "=" * 60)
             print(f"📁 RESULTS SAVED")
@@ -705,6 +999,8 @@ Examples:
                 print(f"    🌐 HTML Report: {html_path.name}")
             if summary_log:
                 print(f"    📝 Summary Log: {Path(summary_log).name}")
+            if ranking_report:
+                print(f"    🏆 Ranking Analysis: {Path(ranking_report).name}")
             print("=" * 65)
 
         # Final summary with enhanced aesthetics
