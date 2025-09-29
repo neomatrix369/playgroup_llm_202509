@@ -48,6 +48,7 @@ from analysis.statistics_aggregator import (
     ExperimentStatisticsAggregator,
     BestTemplateRecommender
 )
+from output.report_writer import ReportWriter, ConsoleReporter
 
 
 class BatchExperimentRunner:
@@ -671,37 +672,33 @@ Examples:
 
         ranking_file = output_dir / f"ranking_analysis_{timestamp}.log"
 
-        with open(ranking_file, 'w') as f:
-            f.write("=" * 80 + "\n")
-            f.write("🏆  COMPREHENSIVE RANKING & PERFORMANCE ANALYSIS  🏆\n")
-            f.write("=" * 80 + "\n\n")
+        with ReportWriter.open(ranking_file) as writer:
+            writer.section_header("🏆  COMPREHENSIVE RANKING & PERFORMANCE ANALYSIS  🏆")
+            writer.blank_line()
 
             # 1. Top performing experiments
-            f.write("🥇 TOP PERFORMING EXPERIMENTS (Template + Problem Combinations):\n")
-            f.write("─" * 70 + "\n")
+            writer.subsection_header("🥇 TOP PERFORMING EXPERIMENTS (Template + Problem Combinations):")
             for i, result in enumerate(analysis['experiment_ranking'][:10], 1):
                 grade = "🎯" if result['all_correct_rate'] >= 0.8 else "✅" if result['all_correct_rate'] >= 0.6 else "⚠️"
-                f.write(f"{grade} #{i:2d}: {result['template'][:35]:35s} + {result['problem']}\n")
-                f.write(f"      📊 {result['all_correct_rate']:6.1%} all correct, {result['at_least_one_correct_rate']:6.1%} partial\n")
-                f.write(f"      ⏱️  {self.format_duration(result['individual_duration'])}\n\n")
+                writer.writeln(f"{grade} #{i:2d}: {result['template'][:35]:35s} + {result['problem']}")
+                writer.writeln(f"      📊 {result['all_correct_rate']:6.1%} all correct, {result['at_least_one_correct_rate']:6.1%} partial")
+                writer.writeln(f"      ⏱️  {self.format_duration(result['individual_duration'])}\n")
 
             # 2. Template ranking
-            f.write("=" * 80 + "\n")
-            f.write("📝 TEMPLATE RANKING (Overall Performance Across All Problems):\n")
-            f.write("─" * 70 + "\n")
+            writer.section_separator()
+            writer.subsection_header("📝 TEMPLATE RANKING (Overall Performance Across All Problems):")
             for i, template_data in enumerate(analysis['template_ranking'], 1):
                 grade = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📊"
-                f.write(f"{grade} #{i}: {template_data['template']}\n")
-                f.write(f"    📊 Average: {template_data['avg_all_correct_rate']:6.1%} all correct, {template_data['avg_partial_rate']:6.1%} partial\n")
-                f.write(f"    🎯 Excellent problems: {template_data['excellent_problems']}/{template_data['total_problems']} ({template_data['excellent_problems']/template_data['total_problems']:.1%})\n")
-                f.write(f"    ✅ Good problems: {template_data['good_problems']}/{template_data['total_problems']} ({template_data['good_problems']/template_data['total_problems']:.1%})\n")
-                f.write(f"    ⏱️  Average duration: {self.format_duration(template_data['avg_duration'])}\n")
-                f.write(f"    📈 Weighted score: {template_data['score']:.3f}\n\n")
+                writer.writeln(f"{grade} #{i}: {template_data['template']}")
+                writer.writeln(f"    📊 Average: {template_data['avg_all_correct_rate']:6.1%} all correct, {template_data['avg_partial_rate']:6.1%} partial")
+                writer.writeln(f"    🎯 Excellent problems: {template_data['excellent_problems']}/{template_data['total_problems']} ({template_data['excellent_problems']/template_data['total_problems']:.1%})")
+                writer.writeln(f"    ✅ Good problems: {template_data['good_problems']}/{template_data['total_problems']} ({template_data['good_problems']/template_data['total_problems']:.1%})")
+                writer.writeln(f"    ⏱️  Average duration: {self.format_duration(template_data['avg_duration'])}")
+                writer.writeln(f"    📈 Weighted score: {template_data['score']:.3f}\n")
 
             # 3. Problem difficulty analysis
-            f.write("=" * 80 + "\n")
-            f.write("🎯 PROBLEM DIFFICULTY ANALYSIS:\n")
-            f.write("─" * 70 + "\n")
+            writer.section_separator()
+            writer.subsection_header("🎯 PROBLEM DIFFICULTY ANALYSIS:")
 
             difficulty_groups = {}
             for problem_data in analysis['problem_analysis']:
@@ -713,52 +710,50 @@ Examples:
             for difficulty in ['EASY', 'MEDIUM', 'HARD', 'VERY_HARD']:
                 if difficulty in difficulty_groups:
                     problems = difficulty_groups[difficulty]
-                    f.write(f"🌟 {difficulty} Problems ({len(problems)}):\n")
+                    writer.writeln(f"🌟 {difficulty} Problems ({len(problems)}):")
                     for problem_data in problems:
                         difficulty_icon = "🟢" if difficulty == "EASY" else "🟡" if difficulty == "MEDIUM" else "🟠" if difficulty == "HARD" else "🔴"
-                        f.write(f"  {difficulty_icon} {problem_data['problem']}: {problem_data['avg_all_correct_rate']:6.1%} avg success\n")
-                        f.write(f"     🏆 Best template: {problem_data['best_template'][:40]:40s} ({problem_data['best_score']:6.1%})\n")
-                    f.write("\n")
+                        writer.writeln(f"  {difficulty_icon} {problem_data['problem']}: {problem_data['avg_all_correct_rate']:6.1%} avg success")
+                        writer.writeln(f"     🏆 Best template: {problem_data['best_template'][:40]:40s} ({problem_data['best_score']:6.1%})")
+                    writer.blank_line()
 
             # 4. Best template recommendations
-            f.write("=" * 80 + "\n")
-            f.write("🎯 OPTIMAL TEMPLATE RECOMMENDATIONS PER PROBLEM:\n")
-            f.write("─" * 70 + "\n")
+            writer.section_separator()
+            writer.subsection_header("🎯 OPTIMAL TEMPLATE RECOMMENDATIONS PER PROBLEM:")
             for problem, recommendation in analysis['best_template_per_problem'].items():
-                f.write(f"🎲 Problem: {problem}\n")
-                f.write(f"   🏆 Best: {recommendation['best_template'][:50]:50s} ({recommendation['best_score']:6.1%})\n")
+                writer.writeln(f"🎲 Problem: {problem}")
+                writer.writeln(f"   🏆 Best: {recommendation['best_template'][:50]:50s} ({recommendation['best_score']:6.1%})")
                 if recommendation['alternatives']:
-                    f.write(f"   📋 Alternatives:\n")
+                    writer.writeln("   📋 Alternatives:")
                     for alt in recommendation['alternatives']:
-                        f.write(f"      • {alt['template'][:45]:45s} ({alt['all_correct_rate']:6.1%})\n")
-                f.write("\n")
+                        writer.writeln(f"      • {alt['template'][:45]:45s} ({alt['all_correct_rate']:6.1%})")
+                writer.blank_line()
 
             # 5. Comparative analysis summary
-            f.write("=" * 80 + "\n")
-            f.write("📊 COMPARATIVE ANALYSIS SUMMARY:\n")
-            f.write("─" * 70 + "\n")
+            writer.section_separator()
+            writer.subsection_header("📊 COMPARATIVE ANALYSIS SUMMARY:")
 
             best_template = analysis['template_ranking'][0]
             worst_template = analysis['template_ranking'][-1]
             easiest_problem = analysis['problem_analysis'][0]
             hardest_problem = analysis['problem_analysis'][-1]
 
-            f.write(f"🏆 Best Overall Template: {best_template['template']}\n")
-            f.write(f"   📊 Average success rate: {best_template['avg_all_correct_rate']:.1%}\n")
-            f.write(f"   🎯 Excellent on {best_template['excellent_problems']}/{best_template['total_problems']} problems\n\n")
+            writer.writeln(f"🏆 Best Overall Template: {best_template['template']}")
+            writer.writeln(f"   📊 Average success rate: {best_template['avg_all_correct_rate']:.1%}")
+            writer.writeln(f"   🎯 Excellent on {best_template['excellent_problems']}/{best_template['total_problems']} problems\n")
 
-            f.write(f"⚠️  Most Challenging Template: {worst_template['template']}\n")
-            f.write(f"   📊 Average success rate: {worst_template['avg_all_correct_rate']:.1%}\n\n")
+            writer.writeln(f"⚠️  Most Challenging Template: {worst_template['template']}")
+            writer.writeln(f"   📊 Average success rate: {worst_template['avg_all_correct_rate']:.1%}\n")
 
-            f.write(f"🟢 Easiest Problem: {easiest_problem['problem']}\n")
-            f.write(f"   📊 Average success rate: {easiest_problem['avg_all_correct_rate']:.1%}\n")
-            f.write(f"   🏆 Best template: {easiest_problem['best_template']}\n\n")
+            writer.writeln(f"🟢 Easiest Problem: {easiest_problem['problem']}")
+            writer.writeln(f"   📊 Average success rate: {easiest_problem['avg_all_correct_rate']:.1%}")
+            writer.writeln(f"   🏆 Best template: {easiest_problem['best_template']}\n")
 
-            f.write(f"🔴 Hardest Problem: {hardest_problem['problem']}\n")
-            f.write(f"   📊 Average success rate: {hardest_problem['avg_all_correct_rate']:.1%}\n")
-            f.write(f"   🏆 Best template: {hardest_problem['best_template']}\n\n")
+            writer.writeln(f"🔴 Hardest Problem: {hardest_problem['problem']}")
+            writer.writeln(f"   📊 Average success rate: {hardest_problem['avg_all_correct_rate']:.1%}")
+            writer.writeln(f"   🏆 Best template: {hardest_problem['best_template']}\n")
 
-            f.write("=" * 80 + "\n")
+            writer.section_separator()
 
         return str(ranking_file)
 
