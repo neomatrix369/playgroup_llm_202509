@@ -69,6 +69,12 @@ Examples:
 
   # Use different method module
   python run_all_problems.py --method method2_reflexion --model openrouter/deepseek/deepseek-chat-v3-0324
+
+  # Analyze existing experiments and generate summary statistics
+  python run_all_problems.py --summarise-experiments --verbose
+
+  # Summarize experiments from custom output directory
+  python run_all_problems.py --summarise-experiments -o my_custom_results
             """)
 
         # Core experiment parameters
@@ -92,6 +98,8 @@ Examples:
                           help="Show what would be run without executing")
         parser.add_argument("-v", "--verbose", action="store_true",
                           help="Verbose output")
+        parser.add_argument("--summarise-experiments", action="store_true",
+                          help="Analyze existing experiment results and generate/update summary statistics")
 
         return parser.parse_args()
 
@@ -736,6 +744,358 @@ Examples:
 
         return str(ranking_file)
 
+    def discover_existing_experiments(self, base_output_dir: Path) -> List[Dict[str, Any]]:
+        """Discover existing experiment result directories and load their data."""
+        if not base_output_dir.exists():
+            print(f"⚠️  Output directory {base_output_dir} does not exist")
+            return []
+
+        experiment_dirs = []
+        for item in base_output_dir.iterdir():
+            if item.is_dir() and item.name.replace('_', '').replace('-', '').isdigit():
+                # Look for CSV files in the directory
+                csv_files = list(item.glob("batch_results_*.csv"))
+                if csv_files:
+                    experiment_dirs.append({
+                        'directory': item,
+                        'timestamp': item.name,
+                        'csv_file': csv_files[0],
+                        'date': item.stat().st_mtime
+                    })
+
+        # Sort by date (most recent first)
+        experiment_dirs.sort(key=lambda x: x['date'], reverse=True)
+        return experiment_dirs
+
+    def load_experiment_data(self, csv_file: Path) -> List[Dict[str, Any]]:
+        """Load experiment data from CSV file."""
+        if pd is None:
+            print("⚠️  pandas not available, cannot load experiment data")
+            return []
+
+        try:
+            df = pd.read_csv(csv_file)
+            return df.to_dict('records')
+        except Exception as e:
+            print(f"⚠️  Error loading {csv_file}: {e}")
+            return []
+
+    def aggregate_experiment_data(self, all_experiments: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Aggregate data from multiple experiment runs."""
+        if not all_experiments:
+            return {}
+
+        # Combine all experiment data
+        all_results = []
+        experiment_metadata = []
+
+        for exp in all_experiments:
+            data = self.load_experiment_data(exp['csv_file'])
+            if data:
+                # Add metadata to each result
+                for result in data:
+                    result['experiment_timestamp'] = exp['timestamp']
+                    result['experiment_date'] = exp['date']
+                all_results.extend(data)
+
+                experiment_metadata.append({
+                    'timestamp': exp['timestamp'],
+                    'date': exp['date'],
+                    'result_count': len(data),
+                    'directory': str(exp['directory'])
+                })
+
+        if not all_results:
+            return {}
+
+        # Create temporary results data for analysis
+        original_results = self.results_data
+        self.results_data = all_results
+
+        # Generate analysis
+        analysis = self.generate_ranking_analysis()
+
+        # Restore original results
+        self.results_data = original_results
+
+        # Add aggregated statistics
+        template_stats = {}
+        problem_stats = {}
+        experiment_stats = {}
+
+        for result in all_results:
+            template = result['template']
+            problem = result['problem']
+            experiment = f"{template}|{problem}"
+
+            # Template statistics
+            if template not in template_stats:
+                template_stats[template] = {
+                    'total_runs': 0,
+                    'success_rates': [],
+                    'durations': [],
+                    'experiments': 0
+                }
+            template_stats[template]['total_runs'] += 1
+            template_stats[template]['success_rates'].append(result.get('all_correct_rate', 0))
+            template_stats[template]['durations'].append(result.get('individual_duration', 0))
+            template_stats[template]['experiments'] += 1
+
+            # Problem statistics
+            if problem not in problem_stats:
+                problem_stats[problem] = {
+                    'total_runs': 0,
+                    'success_rates': [],
+                    'templates_used': set(),
+                    'experiments': 0
+                }
+            problem_stats[problem]['total_runs'] += 1
+            problem_stats[problem]['success_rates'].append(result.get('all_correct_rate', 0))
+            problem_stats[problem]['templates_used'].add(template)
+            problem_stats[problem]['experiments'] += 1
+
+            # Experiment combination statistics
+            if experiment not in experiment_stats:
+                experiment_stats[experiment] = {
+                    'runs': 0,
+                    'success_rates': [],
+                    'timestamps': []
+                }
+            experiment_stats[experiment]['runs'] += 1
+            experiment_stats[experiment]['success_rates'].append(result.get('all_correct_rate', 0))
+            experiment_stats[experiment]['timestamps'].append(result.get('experiment_timestamp', ''))
+
+        # Calculate aggregated metrics
+        for template_data in template_stats.values():
+            template_data['avg_success_rate'] = sum(template_data['success_rates']) / len(template_data['success_rates'])
+            template_data['max_success_rate'] = max(template_data['success_rates'])
+            template_data['avg_duration'] = sum(template_data['durations']) / len(template_data['durations'])
+
+        for problem_data in problem_stats.values():
+            problem_data['avg_success_rate'] = sum(problem_data['success_rates']) / len(problem_data['success_rates'])
+            problem_data['max_success_rate'] = max(problem_data['success_rates'])
+            problem_data['templates_used'] = list(problem_data['templates_used'])
+
+        for exp_data in experiment_stats.values():
+            exp_data['avg_success_rate'] = sum(exp_data['success_rates']) / len(exp_data['success_rates'])
+            exp_data['max_success_rate'] = max(exp_data['success_rates'])
+            exp_data['latest_run'] = max(exp_data['timestamps']) if exp_data['timestamps'] else ''
+
+        return {
+            'analysis': analysis,
+            'template_stats': template_stats,
+            'problem_stats': problem_stats,
+            'experiment_stats': experiment_stats,
+            'experiment_metadata': experiment_metadata,
+            'total_results': len(all_results),
+            'total_experiments': len(all_experiments)
+        }
+
+    def generate_persistent_summary(self, base_output_dir: Path, aggregated_data: Dict[str, Any]) -> List[str]:
+        """Generate persistent summary files that aggregate all experiments."""
+        if not aggregated_data:
+            return []
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        generated_files = []
+
+        # 1. Overall experiment summary
+        summary_file = base_output_dir / "experiment_summary_latest.log"
+        with open(summary_file, 'w') as f:
+            f.write("=" * 80 + "\n")
+            f.write("📊  COMPREHENSIVE EXPERIMENT SUMMARY (ALL RUNS)  📊\n")
+            f.write("=" * 80 + "\n\n")
+            f.write(f"📅 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"🧮 Total experiments analyzed: {aggregated_data['total_experiments']}\n")
+            f.write(f"📊 Total individual results: {aggregated_data['total_results']}\n\n")
+
+            # Recent experiments
+            f.write("🕒 RECENT EXPERIMENTS:\n")
+            f.write("─" * 40 + "\n")
+            for exp in aggregated_data['experiment_metadata'][:5]:
+                date_str = datetime.fromtimestamp(exp['date']).strftime('%Y-%m-%d %H:%M')
+                f.write(f"  📁 {exp['timestamp']}: {exp['result_count']} results ({date_str})\n")
+
+            # Template performance
+            if aggregated_data.get('analysis', {}).get('template_ranking'):
+                f.write(f"\n🏆 TOP TEMPLATES (All-Time Performance):\n")
+                f.write("─" * 50 + "\n")
+                for i, template_data in enumerate(aggregated_data['analysis']['template_ranking'][:5], 1):
+                    f.write(f"  #{i}: {template_data['template'][:45]:45s}\n")
+                    f.write(f"      📊 Avg: {template_data['avg_all_correct_rate']:6.1%} | Score: {template_data['score']:.3f}\n")
+
+            # Problem insights
+            if aggregated_data.get('analysis', {}).get('problem_analysis'):
+                f.write(f"\n🎯 PROBLEM DIFFICULTY INSIGHTS:\n")
+                f.write("─" * 40 + "\n")
+                easy_problems = [p for p in aggregated_data['analysis']['problem_analysis'] if p['difficulty'] == 'EASY']
+                hard_problems = [p for p in aggregated_data['analysis']['problem_analysis'] if p['difficulty'] in ['HARD', 'VERY_HARD']]
+
+                if easy_problems:
+                    f.write(f"  🟢 Easiest: {', '.join([p['problem'] for p in easy_problems[:3]])}\n")
+                if hard_problems:
+                    f.write(f"  🔴 Hardest: {', '.join([p['problem'] for p in hard_problems[:3]])}\n")
+
+            f.write("\n" + "=" * 80 + "\n")
+
+        generated_files.append(str(summary_file))
+
+        # 2. Template performance trends (CSV)
+        if pd is not None and aggregated_data['template_stats']:
+            template_trends_data = []
+            for template, stats in aggregated_data['template_stats'].items():
+                template_trends_data.append({
+                    'template': template,
+                    'total_experiments': stats['experiments'],
+                    'avg_success_rate': stats['avg_success_rate'],
+                    'max_success_rate': stats['max_success_rate'],
+                    'avg_duration': stats['avg_duration'],
+                    'consistency_score': 1.0 - (max(stats['success_rates']) - min(stats['success_rates']))
+                })
+
+            template_df = pd.DataFrame(template_trends_data)
+            template_df = template_df.sort_values('avg_success_rate', ascending=False)
+            template_trends_file = base_output_dir / "template_performance_trends.csv"
+            template_df.to_csv(template_trends_file, index=False)
+            generated_files.append(str(template_trends_file))
+
+        # 3. Problem performance analysis (CSV)
+        if pd is not None and aggregated_data['problem_stats']:
+            problem_trends_data = []
+            for problem, stats in aggregated_data['problem_stats'].items():
+                problem_trends_data.append({
+                    'problem': problem,
+                    'total_experiments': stats['experiments'],
+                    'avg_success_rate': stats['avg_success_rate'],
+                    'max_success_rate': stats['max_success_rate'],
+                    'templates_tested': len(stats['templates_used']),
+                    'difficulty_rating': 'EASY' if stats['avg_success_rate'] >= 0.7 else
+                                       'MEDIUM' if stats['avg_success_rate'] >= 0.4 else
+                                       'HARD' if stats['avg_success_rate'] >= 0.2 else 'VERY_HARD'
+                })
+
+            problem_df = pd.DataFrame(problem_trends_data)
+            problem_df = problem_df.sort_values('avg_success_rate', ascending=False)
+            problem_trends_file = base_output_dir / "problem_difficulty_trends.csv"
+            problem_df.to_csv(problem_trends_file, index=False)
+            generated_files.append(str(problem_trends_file))
+
+        # 4. Best combinations lookup table
+        if aggregated_data.get('analysis', {}).get('best_template_per_problem'):
+            lookup_file = base_output_dir / "best_template_lookup.json"
+            import json
+
+            lookup_data = {
+                'generated': datetime.now().isoformat(),
+                'recommendations': {}
+            }
+
+            for problem, recommendation in aggregated_data['analysis']['best_template_per_problem'].items():
+                lookup_data['recommendations'][problem] = {
+                    'best_template': recommendation['best_template'],
+                    'success_rate': recommendation['best_score'],
+                    'alternatives': [
+                        {
+                            'template': alt['template'],
+                            'success_rate': alt['all_correct_rate']
+                        }
+                        for alt in recommendation['alternatives'][:3]
+                    ]
+                }
+
+            with open(lookup_file, 'w') as f:
+                json.dump(lookup_data, f, indent=2)
+            generated_files.append(str(lookup_file))
+
+        return generated_files
+
+    def run_summarise_experiments(self, args: argparse.Namespace) -> None:
+        """Analyze existing experiments and generate/update summary statistics."""
+        print("\n" + "=" * 80)
+        print("📊  EXPERIMENT SUMMARIZATION MODE  📊")
+        print("=" * 80)
+
+        base_output_dir = Path(args.output_dir)
+        self.log_timestamp(f"🔍 Scanning for existing experiments in {base_output_dir}")
+
+        # Discover existing experiments
+        experiments = self.discover_existing_experiments(base_output_dir)
+
+        if not experiments:
+            print(f"❌ No experiment results found in {base_output_dir}")
+            print("   💡 Run some experiments first with: python run_all_problems.py")
+            return
+
+        print(f"✅ Found {len(experiments)} experiment run(s)")
+
+        if args.verbose:
+            for i, exp in enumerate(experiments[:5], 1):
+                date_str = datetime.fromtimestamp(exp['date']).strftime('%Y-%m-%d %H:%M')
+                print(f"   {i}. {exp['timestamp']} ({date_str})")
+            if len(experiments) > 5:
+                print(f"   ... and {len(experiments) - 5} more")
+
+        self.log_timestamp("📈 Aggregating experiment data...")
+
+        # Aggregate all experiment data
+        aggregated_data = self.aggregate_experiment_data(experiments)
+
+        if not aggregated_data:
+            print("❌ No valid experiment data could be loaded")
+            return
+
+        # Generate summary insights (console output)
+        print(f"\n🏆 " + "=" * 70)
+        print(f"📊 AGGREGATED INSIGHTS FROM ALL EXPERIMENTS")
+        print("=" * 75)
+
+        if aggregated_data.get('analysis', {}).get('template_ranking'):
+            best_template = aggregated_data['analysis']['template_ranking'][0]
+            print(f"🥇 Best Overall Template: {best_template['template']}")
+            print(f"   📊 Average success: {best_template['avg_all_correct_rate']:.1%}")
+            print(f"   🎯 Tested on {best_template['total_problems']} problems")
+
+        if aggregated_data.get('template_stats'):
+            print(f"\n📝 Template Statistics:")
+            template_count = len(aggregated_data['template_stats'])
+            print(f"   🔢 Total templates tested: {template_count}")
+
+            most_tested = max(aggregated_data['template_stats'].items(),
+                            key=lambda x: x[1]['experiments'])
+            print(f"   🧪 Most tested: {most_tested[0][:40]:40s} ({most_tested[1]['experiments']} times)")
+
+        if aggregated_data.get('problem_stats'):
+            print(f"\n🎯 Problem Statistics:")
+            problem_count = len(aggregated_data['problem_stats'])
+            print(f"   🔢 Total problems tested: {problem_count}")
+
+            hardest_problem = min(aggregated_data['problem_stats'].items(),
+                                key=lambda x: x[1]['avg_success_rate'])
+            print(f"   🔴 Hardest problem: {hardest_problem[0]} ({hardest_problem[1]['avg_success_rate']:.1%} avg success)")
+
+        print("=" * 75)
+
+        self.log_timestamp("💾 Generating persistent summary files...")
+
+        # Generate persistent summary files
+        generated_files = self.generate_persistent_summary(base_output_dir, aggregated_data)
+
+        print(f"\n💾 " + "=" * 60)
+        print(f"📁 SUMMARY FILES GENERATED")
+        print("=" * 65)
+        print(f"    📂 Directory: {base_output_dir}")
+        for file_path in generated_files:
+            file_name = Path(file_path).name
+            print(f"    📄 {file_name}")
+        print("=" * 65)
+
+        self.log_timestamp("✅ Experiment summarization completed!")
+        print("\n💡 Use these files to:")
+        print("   📊 Track template performance over time")
+        print("   🎯 Identify problem difficulty patterns")
+        print("   🔍 Find optimal template selections")
+        print("   📈 Monitor experiment trends")
+
     def generate_summary_log(self, output_dir: Path, timestamp: str, total_duration: float, templates_to_use: list, problems_to_use: list, total_combinations: int) -> str:
         """Generate detailed summary log file."""
         if not self.results_data:
@@ -1062,7 +1422,10 @@ def main():
     args = runner.parse_arguments()
 
     try:
-        runner.run_batch_experiments(args)
+        if args.summarise_experiments:
+            runner.run_summarise_experiments(args)
+        else:
+            runner.run_batch_experiments(args)
     except KeyboardInterrupt:
         print("\n\nExperiment interrupted by user")
     except Exception as e:
