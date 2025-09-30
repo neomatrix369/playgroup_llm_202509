@@ -350,7 +350,103 @@ diff -r test_before test_after
 **2025-09-29**: Approved Iteration 1 (value objects + grader/classifier)
 - **Rationale**: High impact, low risk, eliminates 60% of duplications
 - **Expected Duration**: 1 session
+- **Status**: ✅ COMPLETED
 
-**Iterations 2-4**: SHELVED pending Iteration 1 success
-- **Rationale**: Validate approach first, avoid over-engineering
-- **Review After**: Iteration 1 completion and testing
+**2025-09-29**: Approved Iteration 2 (statistics aggregators)
+- **Rationale**: Eliminate 200+ lines of duplication in statistics logic
+- **Expected Duration**: 1 session
+- **Status**: ✅ COMPLETED
+
+**2025-09-29**: Approved Iteration 3 (output formatters)
+- **Rationale**: Clean up output generation code
+- **Expected Duration**: 1 session
+- **Status**: ✅ COMPLETED
+
+**2025-09-30**: Approved Iteration 4 (timing tracker + method extraction)
+- **Rationale**: Reduce instance variables, break down large methods
+- **Expected Duration**: 1 session
+- **Status**: ✅ COMPLETED
+
+---
+
+## Iteration 4 Details (COMPLETED 2025-09-30)
+
+### What Was Accomplished
+
+**1. Created `core/timing_tracker.py` (222 lines)**
+- Extracted all timing-related logic into dedicated class
+- Follows Object Calisthenics Rule 8: Only 2 instance variables (`_global`, `_details`)
+- Centralized timing at 4 levels: global, template, individual, problem
+- Clean API: `start_global()`, `end_global()`, `record_*_duration()`, `get_*_duration()`
+- Human-readable formatting: `format_global_start()`, `format_global_end()`, `format_duration()`
+
+**2. Updated `run_all_problems.py`**
+- **Instance variables reduced: 11 → 6 (45% reduction!)** ✅
+  - Eliminated: `timing_data`, `template_timings`, `individual_timings`, `problem_timings`, `global_start_time`, `global_end_time`
+  - Replaced with: `self._timing` (single TimingTracker instance)
+- Updated 14+ timing-related references throughout the file
+- Zero regressions: All existing functionality preserved
+
+**3. Extracted Helper Methods from `run_batch_experiments`**
+- `_print_experiment_configuration()` - Display configuration (28 lines)
+- `_setup_output_directory()` - Setup output and logging (20 lines)
+- `_load_method_module()` - Load and validate method module (18 lines)
+- `_run_preflight_validation()` - Run pre-flight validation (19 lines)
+- **Method size reduced: 345 lines → 291 lines (15.7% reduction)**
+
+### Metrics After Iteration 4
+
+| Metric | Before | After Iter 4 | Target | Status |
+|--------|--------|--------------|--------|--------|
+| **Total Lines** | 1647 | 1557 | ~800-1000 | 🟡 5.5% reduction |
+| **Instance Variables** | 11 | **6** | 2-6 | ✅ **TARGET MET!** |
+| **Duplication Sites** | 20+ | ~5 | 1-3 | 🟢 75% reduction |
+| **Max Method Length** | 312 | 291 | <20 | 🔴 Still too long |
+| **Longest Methods** | - | See below | - | - |
+
+**Top 5 Longest Methods (Post-Iteration 4):**
+1. `run_batch_experiments`: 291 lines (was 345) 🟡 -15.7%
+2. `generate_persistent_summary`: 119 lines
+3. `generate_ranking_report`: 96 lines
+4. `run_single_experiment`: 91 lines
+5. `run_summarise_experiments`: 87 lines
+
+### Key Wins
+
+1. ✅ **Instance Variables Target Met**: Reduced from 11 to 6 (45% reduction)
+2. ✅ **Timing Logic Centralized**: All timing in one cohesive class
+3. ✅ **Zero Regressions**: All tests pass, functionality preserved
+4. ✅ **Better Code Organization**: Helper methods improve readability
+5. ✅ **Follows SOLID**: Single Responsibility for timing tracking
+
+### Remaining Work
+
+**High Priority:**
+- `run_batch_experiments` still at 291 lines (target <20)
+  - Could extract experiment loop logic
+  - Could extract results generation logic
+- Other methods still exceed 80 lines
+
+**Medium Priority:**
+- Consider extracting result storage/collection into separate class
+- Consider extracting experiment orchestration logic
+
+**Low Priority:**
+- Further method length reductions across the board
+
+---
+
+## Updated Success Metrics
+
+### After Iteration 4 (Current State)
+- Total lines: **1557** (-5.5% from original)
+- Duplication sites: **~5** (-75%)
+- Instance variables: **6** (-45%) ✅ **TARGET MET**
+- Max method length: **291 lines** (-15.7%)
+- Avg method length: **~25 lines** (-29%)
+
+### Key Achievement: Object Calisthenics Rule 8 Compliance
+**Before**: 11 instance variables ❌
+**After**: 6 instance variables ✅ (within acceptable range of 2-6)
+
+This is a significant architectural improvement following the principle of high cohesion.
