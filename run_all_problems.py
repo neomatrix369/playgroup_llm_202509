@@ -325,18 +325,44 @@ Examples:
         Setup output directory and logging. Returns (output_dir, timestamp).
 
         Following Object Calisthenics Rule 7: Small focused methods.
+        
+        If output_dir contains a checkpoint.json, use it directly (resume mode).
+        Otherwise, create a new timestamped subdirectory.
         """
         base_output_dir = Path(args.output_dir)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = base_output_dir / timestamp
+        
+        # Check if we're resuming from an existing experiment directory
+        checkpoint_exists = (base_output_dir / "checkpoint.json").exists()
+        
+        if checkpoint_exists and not args.no_resume:
+            # Use the existing directory directly (resume mode)
+            output_dir = base_output_dir
+            # Extract original timestamp from directory name or use current for log
+            dir_name = base_output_dir.name
+            if dir_name and len(dir_name) >= 15 and dir_name[:8].isdigit():
+                timestamp = dir_name[:15]  # Extract existing timestamp (YYYYMMDD_HHMMSS)
+            else:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            print(f"\n🔄 Resuming in existing directory: {output_dir}")
+        else:
+            # Create new timestamped subdirectory (normal mode)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_dir = base_output_dir / timestamp
+            print(f"\n💾 Results will be saved to: {output_dir}")
 
         if not args.dry_run:
             output_dir.mkdir(parents=True, exist_ok=True)
-            print(f"\n💾 Results will be saved to: {output_dir}")
 
-            # Setup log file
+            # Setup log file (append mode if resuming, write mode if new)
             log_file = output_dir / f"experiment_run_{timestamp}.log"
-            self.log_file_handle = open(log_file, 'w')
+            mode = 'a' if checkpoint_exists and not args.no_resume else 'w'
+            self.log_file_handle = open(log_file, mode)
+            
+            if mode == 'a':
+                self.log_file_handle.write(f"\n\n{'='*80}\n")
+                self.log_file_handle.write(f"RESUMED: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                self.log_file_handle.write(f"{'='*80}\n\n")
+            
             self.log_timestamp(f"Logging to: {log_file}")
             print(f"📝 Detailed log: {log_file.name}")
 
