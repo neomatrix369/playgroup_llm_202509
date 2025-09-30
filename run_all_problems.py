@@ -15,7 +15,6 @@ Merges functionality from run_batch_tests.sh and run_all_problems.py:
 
 import argparse
 import importlib
-import time
 import traceback
 from collections import Counter
 from datetime import datetime
@@ -57,6 +56,8 @@ from core.timing_tracker import TimingTracker
 from core.experiment_config import ExperimentConfigResolver
 from core.experiment_executor import ExperimentExecutor
 from core.experiment_validator import ExperimentValidator
+from core.experiment_loop_orchestrator import ExperimentLoopOrchestrator
+from domain.value_objects import SuccessThresholds
 
 
 class BatchExperimentRunner:
@@ -92,6 +93,12 @@ class BatchExperimentRunner:
         
         # Experiment summarizer (Phase 2D refactoring)
         self._summarizer: Optional[ExperimentSummarizer] = None
+        
+        # Experiment loop orchestrator (Primitive obsession refactoring)
+        self._loop_orchestrator: Optional[ExperimentLoopOrchestrator] = None
+        
+        # Success thresholds (removes primitive obsession: magic numbers)
+        self._thresholds = SuccessThresholds()
 
     def parse_arguments(self) -> argparse.Namespace:
         """Parse command line arguments with comprehensive options."""
@@ -235,6 +242,22 @@ Examples:
                 log_callback=self.log_timestamp
             )
         return self._summarizer
+    
+    def _get_loop_orchestrator(self) -> ExperimentLoopOrchestrator:
+        """Get or create ExperimentLoopOrchestrator instance (lazy initialization)."""
+        if self._loop_orchestrator is None:
+            # Get executor first
+            executor = self._get_executor()
+            
+            self._loop_orchestrator = ExperimentLoopOrchestrator(
+                timing_tracker=self._timing,
+                log_callback=self.log_timestamp,
+                format_duration_callback=self.format_duration,
+                run_experiment_callback=self.run_single_experiment,
+                analyze_results_callback=self.analyze_results,
+                success_thresholds=self._thresholds
+            )
+        return self._loop_orchestrator
 
     def validate_prerequisites(self, templates_to_use: List[str], problems_to_use: List[str], method_module: Any, args: argparse.Namespace) -> Tuple[bool, List[str]]:
         """Validate all prerequisites before starting experiments."""
@@ -1004,89 +1027,29 @@ Examples:
         if not self._run_preflight_validation(templates_to_use, problems_to_use, method_module, args):
             return
 
-        # Execute experiments with branching timing
-        current_test = 0
-
-        # Template-level timing loop
-        for template in templates_to_use:
-            template_start_time = time.time()
-
-            print(f"\n🔄 " + "=" * 70)
-            print(f"📝 TEMPLATE BRANCH: {template}")
-            print("=" * 75)
-            self.log_timestamp(f"🌿 Starting template branch: {template} ({len(problems_to_use)} problems)")
-
-            # Problem-level timing loop
-            for problem in problems_to_use:
-                problem_start_time = time.time()
-                current_test += 1
-
-                print(f"\n🎯 TEST [{current_test:02d}/{total_combinations:02d}] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                print(f"    📝 Template: {template}")
-                print(f"    🎲 Problem:  {problem}")
-                self.log_timestamp(f"🔍 Branch: {template} → {problem} (Test {current_test}/{total_combinations})")
-
-                try:
-                    llm_responses, rr_trains = self.run_single_experiment(
-                        template, problem, method_module, args, output_dir
-                    )
-
-                    # Collect LLM responses
-                    self.all_llm_responses.extend(llm_responses)
-
-                    # Analyze results with real-time feedback
-                    if not args.dry_run:
-                        result_analysis = self.analyze_results(template, problem, rr_trains, args.iterations, args.verbose)
-                        self.results_data.append(result_analysis)
-
-                    # Overall success indicator
-                    if not args.dry_run and result_analysis['all_correct_rate'] >= 0.8:
-                        print("  🎯 Excellent Results!")
-                    elif not args.dry_run and result_analysis['all_correct_rate'] >= 0.5:
-                        print("  ✅ Good Results!")
-                    elif not args.dry_run and result_analysis['at_least_one_correct_rate'] >= 0.5:
-                        print("  ⚠️ Partial Success")
-                    else:
-                        print("  ✓ Test Completed" if args.dry_run else "  ❌ Poor Results")
-
-                except Exception as e:
-                    print(f"\n  ❌ EXPERIMENT FAILED: {str(e)}")
-                    print(f"     Template: {template}")
-                    print(f"     Problem: {problem}")
-
-                    # Always show traceback in verbose mode or when logging to file
-                    if args.verbose:
-                        traceback.print_exc()
-
-                    # If fail-fast is enabled, stop execution
-                    if args.fail_fast:
-                        print(f"\n❌ Stopping execution due to --fail-fast flag")
-                        print(f"   Failed on test {current_test}/{total_combinations}")
-                        print(f"   Template: {template}, Problem: {problem}")
-                        # Generate failure summary before exiting
-                        self._generate_failure_summary()
-                        return
-
-                # Problem-level timing summary
-                problem_end_time = time.time()
-                problem_duration = problem_end_time - problem_start_time
-                self._timing.record_problem_duration(template, problem, problem_duration)
-
-                formatted_duration = self.format_duration(problem_duration)
-                self.log_timestamp(f"✅ Problem completed: {problem} in {formatted_duration}")
-
-            # Template-level timing summary
-            template_end_time = time.time()
-            template_duration = template_end_time - template_start_time
-            self._timing.record_template_duration(template, template_duration)
-
-            formatted_duration = self.format_duration(template_duration)
-            self.log_timestamp(f"🏁 Template branch completed: {template} in {formatted_duration} ({len(problems_to_use)} problems)")
-
-            # Template performance summary
-            if not args.dry_run:
+        # Execute experiments using orchestrator (removes 100+ lines of procedural code)
+        orchestrator = self._get_loop_orchestrator()
+        loop_result = orchestrator.execute_loop(
+            templates_to_use, problems_to_use, method_module, args, output_dir
+        )
+        
+        # Collect results from orchestrator
+        self.results_data = loop_result['results_data']
+        self.all_llm_responses = loop_result['all_llm_responses']
+        self.failed_experiments = loop_result['failed_experiments']
+        
+        # If loop stopped early due to fail-fast, handle it
+        if not loop_result['completed']:
+            self._generate_failure_summary()
+            return
+        
+        # Print template performance summaries
+        if not args.dry_run:
+            for template in templates_to_use:
                 template_results = [r for r in self.results_data if r['template'] == template]
                 if template_results:
+                    template_duration = self._timing.get_template_duration(template)
+                    formatted_duration = self.format_duration(template_duration)
                     self._print_template_performance_summary(template, template_results, formatted_duration)
 
         # Record global end time
