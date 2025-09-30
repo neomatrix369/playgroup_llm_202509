@@ -112,7 +112,13 @@ class ExperimentContext:
         if self._log_file_handle:
             self._log_file_handle.close()
         self._log_file_handle = open(path, 'w')
-    
+
+    def set_log_handle(self, handle: Any) -> None:
+        """Set an already-opened log file handle (for resume mode)."""
+        if self._log_file_handle and self._log_file_handle != handle:
+            self._log_file_handle.close()
+        self._log_file_handle = handle
+
     def write_to_log(self, message: str) -> None:
         """Write message to log file."""
         if self._log_file_handle:
@@ -124,7 +130,11 @@ class ExperimentContext:
         if self._log_file_handle:
             self._log_file_handle.close()
             self._log_file_handle = None
-    
+
+    def close_log(self) -> None:
+        """Alias for close_log_file() for backward compatibility."""
+        self.close_log_file()
+
     def increment_attempts(self) -> int:
         """Increment and return experiments attempted."""
         self._total_experiments_attempted += 1

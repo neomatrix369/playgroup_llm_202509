@@ -156,15 +156,18 @@ def execute_transform(code_as_line, problems):
                 final_gen = np.array([[]])
                 was_correct = False
             else:
-                # Convert to numpy array if it's not already one
+                # Transform must return np.ndarray - do not accept lists or other types
                 if not isinstance(final_gen, np.ndarray):
+                    # Mark as incorrect if transform returns non-ndarray type
+                    was_correct = False
+                    # Convert to ndarray for display purposes only
                     try:
                         final_gen = np.array(final_gen)
-                    except (ValueError, TypeError) as e:
-                        raise ValueError(
-                            f"Cannot convert transform output to numpy array. Got {type(final_gen)}: {e}"
-                        )
-                was_correct = (final_gen == final).all()
+                    except (ValueError, TypeError):
+                        # If conversion fails, create empty array
+                        final_gen = np.array([[]])
+                else:
+                    was_correct = (final_gen == final).all()
 
             if was_correct:
                 partial_score += 1  # we get a point if we match the desired final
