@@ -1264,6 +1264,167 @@ Examples:
         print(f"{'='*80}\n")
         return True
 
+    def _print_template_performance_summary(
+        self, template: str, template_results: List[Dict[str, Any]], formatted_duration: str
+    ) -> None:
+        """Print performance summary for a completed template.
+
+        Args:
+            template: Template name
+            template_results: List of result dictionaries for this template
+            formatted_duration: Formatted duration string
+        """
+        excellent_count = len([r for r in template_results if r['all_correct_rate'] >= 0.8])
+        good_count = len([r for r in template_results if 0.5 <= r['all_correct_rate'] < 0.8])
+        partial_count = len([r for r in template_results if r['all_correct_rate'] < 0.5 and r['at_least_one_correct_rate'] >= 0.5])
+        poor_count = len([r for r in template_results if r['at_least_one_correct_rate'] < 0.5])
+
+        avg_all_correct = sum(r['all_correct_rate'] for r in template_results) / len(template_results)
+        avg_partial = sum(r['at_least_one_correct_rate'] for r in template_results) / len(template_results)
+
+        print(f"\n📊 " + "─" * 60)
+        print(f"📈 TEMPLATE PERFORMANCE SUMMARY: {template}")
+        print("─" * 65)
+        print(f"    🎯 Excellent (≥80%): {excellent_count:2d} problems")
+        print(f"    ✅ Good (50-79%):   {good_count:2d} problems")
+        print(f"    ⚠️  Partial (<50% all, ≥50% some): {partial_count:2d} problems")
+        print(f"    ❌ Poor (<50% any): {poor_count:2d} problems")
+        print(f"    📊 Average success: {avg_all_correct:.1%} all correct, {avg_partial:.1%} partial")
+        print(f"    ⏱️  Total duration: {formatted_duration}")
+        print("─" * 65)
+
+    def _print_key_insights(self, analysis: Dict[str, Any]) -> None:
+        """Print key insights and rankings from experiment analysis.
+
+        Args:
+            analysis: Analysis dictionary from generate_ranking_analysis()
+        """
+        print(f"\n🏆 " + "=" * 70)
+        print(f"🎯 KEY INSIGHTS & RANKINGS")
+        print("=" * 75)
+
+        # Best template overall
+        best_template = analysis['template_ranking'][0]
+        print(f"🥇 Best Overall Template: {best_template['template']}")
+        print(f"   📊 Average success: {best_template['avg_all_correct_rate']:.1%} all correct")
+        print(f"   🎯 Excellent on {best_template['excellent_problems']}/{best_template['total_problems']} problems")
+
+        # Top 3 experiments
+        print(f"\n🌟 Top 3 Performing Experiments:")
+        for i, result in enumerate(analysis['experiment_ranking'][:3], 1):
+            grade = "🎯" if result['all_correct_rate'] >= 0.8 else "✅" if result['all_correct_rate'] >= 0.6 else "⚠️"
+            template_short = result['template'][:30] + "..." if len(result['template']) > 30 else result['template']
+            print(f"   {grade} #{i}: {template_short} + {result['problem']} ({result['all_correct_rate']:.1%})")
+
+        # Problem difficulty insights
+        easy_problems = [p for p in analysis['problem_analysis'] if p['difficulty'] == 'EASY']
+        hard_problems = [p for p in analysis['problem_analysis'] if p['difficulty'] in ['HARD', 'VERY_HARD']]
+
+        if easy_problems:
+            print(f"\n🟢 Easiest Problems: {', '.join([p['problem'] for p in easy_problems[:3]])}")
+        if hard_problems:
+            print(f"🔴 Hardest Problems: {', '.join([p['problem'] for p in hard_problems[:3]])}")
+
+        print("=" * 75)
+
+    def _generate_and_save_outputs(
+        self, output_dir: Path, timestamp: str, total_duration: float,
+        templates_to_use: List[str], problems_to_use: List[str], total_combinations: int
+    ) -> None:
+        """Generate and save all output files, then print file summary.
+
+        Args:
+            output_dir: Output directory path
+            timestamp: Timestamp string for filenames
+            total_duration: Total experiment duration in seconds
+            templates_to_use: List of templates used
+            problems_to_use: List of problems used
+            total_combinations: Total number of test combinations
+        """
+        csv_file = self.generate_csv_output(output_dir)
+        html_file = self.generate_html_output(output_dir)
+        summary_log = self.generate_summary_log(output_dir, timestamp, total_duration, templates_to_use, problems_to_use, total_combinations)
+        ranking_report = self.generate_ranking_report(output_dir, timestamp)
+
+        print(f"\n💾 " + "=" * 60)
+        print(f"📁 RESULTS SAVED")
+        print("=" * 65)
+        print(f"    📂 Directory: {output_dir}")
+        if csv_file and csv_file != "":
+            csv_path = Path(csv_file) if isinstance(csv_file, str) else csv_file
+            print(f"    📊 CSV File: {csv_path.name}")
+        if html_file and html_file != "":
+            html_path = Path(html_file) if isinstance(html_file, str) else html_file
+            print(f"    🌐 HTML Report: {html_path.name}")
+        if summary_log:
+            print(f"    📝 Summary Log: {Path(summary_log).name}")
+        if ranking_report:
+            print(f"    🏆 Ranking Analysis: {Path(ranking_report).name}")
+        print("=" * 65)
+
+    def _print_final_summary(
+        self, total_duration: float, total_combinations: int,
+        templates_to_use: List[str], problems_to_use: List[str]
+    ) -> None:
+        """Print final experiment summary including performance breakdown and LLM statistics.
+
+        Args:
+            total_duration: Total experiment duration in seconds
+            total_combinations: Total number of test combinations
+            templates_to_use: List of templates used
+            problems_to_use: List of problems used
+        """
+        print(f"\n🏆 " + "=" * 70)
+        print("🎉 FINAL EXPERIMENT SUMMARY 🎉")
+        print("=" * 75)
+        print(f"⏰ Start Time:  {self._timing.format_global_start()}")
+        print(f"🏁 End Time:    {self._timing.format_global_end()}")
+        print(f"⏱️  Duration:    {self.format_duration(total_duration)}")
+        print(f"🧮 Total tests: {total_combinations}")
+
+        if self.results_data:
+            successful_tests = len([r for r in self.results_data if r['all_correct_rate'] > 0])
+            excellent_tests = len([r for r in self.results_data if r['all_correct_rate'] >= 0.8])
+            good_tests = len([r for r in self.results_data if 0.5 <= r['all_correct_rate'] < 0.8])
+
+            print(f"\n📊 PERFORMANCE BREAKDOWN:")
+            print("─" * 40)
+            print(f"🎯 Excellent (≥80%): {excellent_tests:2d} tests")
+            print(f"✅ Good (50-79%):   {good_tests:2d} tests")
+            print(f"⚠️  Some success:    {successful_tests - excellent_tests - good_tests:2d} tests")
+            print(f"❌ No success:      {len(self.results_data) - successful_tests:2d} tests")
+            print(f"📈 Overall success rate: {successful_tests / len(self.results_data):.1%}")
+            print(f"⚡ Average time per test: {self.format_duration(total_duration / total_combinations)}")
+
+            # Template timing breakdown
+            print(f"\n🕐 TEMPLATE PERFORMANCE:")
+            print("─" * 50)
+            for template in templates_to_use:
+                template_time = self._timing.get_template_duration(template)
+                avg_per_problem = template_time / len(problems_to_use)
+                template_results = [r for r in self.results_data if r['template'] == template]
+                avg_success = sum(r['all_correct_rate'] for r in template_results) / len(template_results) if template_results else 0
+
+                print(f"📝 {template[:40]:40s}")
+                print(f"    ⏱️  {self.format_duration(template_time):>10s} (avg: {self.format_duration(avg_per_problem):>8s}/problem)")
+                print(f"    📊 {avg_success:>9.1%} average success rate")
+
+        # LLM usage statistics
+        if self.all_llm_responses:
+            print(f"\n🤖 LLM USAGE STATISTICS:")
+            print("─" * 30)
+            provider_counts = Counter([response.provider for response in self.all_llm_responses])
+            for provider, count in provider_counts.items():
+                print(f"    🔗 {provider}: {count} calls")
+
+            token_usages = [response.usage.total_tokens for response in self.all_llm_responses]
+            print(f"    🎯 Max tokens: {max(token_usages):,}")
+            print(f"    📊 Median tokens: {sorted(token_usages)[len(token_usages)//2]:,}")
+            print(f"    📈 Total tokens: {sum(token_usages):,}")
+
+        print("=" * 75)
+        self.log_timestamp("🎉 EXPERIMENT COMPLETED! 🎉")
+
     def run_batch_experiments(self, args: argparse.Namespace) -> None:
         """Main execution method with comprehensive tracking."""
         # Record global start time
@@ -1378,24 +1539,7 @@ Examples:
             if not args.dry_run:
                 template_results = [r for r in self.results_data if r['template'] == template]
                 if template_results:
-                    excellent_count = len([r for r in template_results if r['all_correct_rate'] >= 0.8])
-                    good_count = len([r for r in template_results if 0.5 <= r['all_correct_rate'] < 0.8])
-                    partial_count = len([r for r in template_results if r['all_correct_rate'] < 0.5 and r['at_least_one_correct_rate'] >= 0.5])
-                    poor_count = len([r for r in template_results if r['at_least_one_correct_rate'] < 0.5])
-
-                    avg_all_correct = sum(r['all_correct_rate'] for r in template_results) / len(template_results)
-                    avg_partial = sum(r['at_least_one_correct_rate'] for r in template_results) / len(template_results)
-
-                    print(f"\n📊 " + "─" * 60)
-                    print(f"📈 TEMPLATE PERFORMANCE SUMMARY: {template}")
-                    print("─" * 65)
-                    print(f"    🎯 Excellent (≥80%): {excellent_count:2d} problems")
-                    print(f"    ✅ Good (50-79%):   {good_count:2d} problems")
-                    print(f"    ⚠️  Partial (<50% all, ≥50% some): {partial_count:2d} problems")
-                    print(f"    ❌ Poor (<50% any): {poor_count:2d} problems")
-                    print(f"    📊 Average success: {avg_all_correct:.1%} all correct, {avg_partial:.1%} partial")
-                    print(f"    ⏱️  Total duration: {formatted_duration}")
-                    print("─" * 65)
+                    self._print_template_performance_summary(template, template_results, formatted_duration)
 
         # Record global end time
         self._timing.end_global()
@@ -1410,106 +1554,12 @@ Examples:
             # Generate ranking analysis and show key insights
             analysis = self.generate_ranking_analysis()
             if analysis:
-                print(f"\n🏆 " + "=" * 70)
-                print(f"🎯 KEY INSIGHTS & RANKINGS")
-                print("=" * 75)
+                self._print_key_insights(analysis)
 
-                # Best template overall
-                best_template = analysis['template_ranking'][0]
-                print(f"🥇 Best Overall Template: {best_template['template']}")
-                print(f"   📊 Average success: {best_template['avg_all_correct_rate']:.1%} all correct")
-                print(f"   🎯 Excellent on {best_template['excellent_problems']}/{best_template['total_problems']} problems")
+            self._generate_and_save_outputs(output_dir, timestamp, total_duration, templates_to_use, problems_to_use, total_combinations)
 
-                # Top 3 experiments
-                print(f"\n🌟 Top 3 Performing Experiments:")
-                for i, result in enumerate(analysis['experiment_ranking'][:3], 1):
-                    grade = "🎯" if result['all_correct_rate'] >= 0.8 else "✅" if result['all_correct_rate'] >= 0.6 else "⚠️"
-                    template_short = result['template'][:30] + "..." if len(result['template']) > 30 else result['template']
-                    print(f"   {grade} #{i}: {template_short} + {result['problem']} ({result['all_correct_rate']:.1%})")
-
-                # Problem difficulty insights
-                easy_problems = [p for p in analysis['problem_analysis'] if p['difficulty'] == 'EASY']
-                hard_problems = [p for p in analysis['problem_analysis'] if p['difficulty'] in ['HARD', 'VERY_HARD']]
-
-                if easy_problems:
-                    print(f"\n🟢 Easiest Problems: {', '.join([p['problem'] for p in easy_problems[:3]])}")
-                if hard_problems:
-                    print(f"🔴 Hardest Problems: {', '.join([p['problem'] for p in hard_problems[:3]])}")
-
-                print("=" * 75)
-
-            csv_file = self.generate_csv_output(output_dir)
-            html_file = self.generate_html_output(output_dir)
-            summary_log = self.generate_summary_log(output_dir, timestamp, total_duration, templates_to_use, problems_to_use, total_combinations)
-            ranking_report = self.generate_ranking_report(output_dir, timestamp)
-
-            print(f"\n💾 " + "=" * 60)
-            print(f"📁 RESULTS SAVED")
-            print("=" * 65)
-            print(f"    📂 Directory: {output_dir}")
-            if csv_file and csv_file != "":
-                csv_path = Path(csv_file) if isinstance(csv_file, str) else csv_file
-                print(f"    📊 CSV File: {csv_path.name}")
-            if html_file and html_file != "":
-                html_path = Path(html_file) if isinstance(html_file, str) else html_file
-                print(f"    🌐 HTML Report: {html_path.name}")
-            if summary_log:
-                print(f"    📝 Summary Log: {Path(summary_log).name}")
-            if ranking_report:
-                print(f"    🏆 Ranking Analysis: {Path(ranking_report).name}")
-            print("=" * 65)
-
-        # Final summary with enhanced aesthetics
-        print(f"\n🏆 " + "=" * 70)
-        print(f"🎉 FINAL EXPERIMENT SUMMARY 🎉")
-        print("=" * 75)
-        print(f"⏰ Start Time:  {self._timing.format_global_start()}")
-        print(f"🏁 End Time:    {self._timing.format_global_end()}")
-        print(f"⏱️  Duration:    {self.format_duration(total_duration)}")
-        print(f"🧮 Total tests: {total_combinations}")
-
-        if self.results_data:
-            successful_tests = len([r for r in self.results_data if r['all_correct_rate'] > 0])
-            excellent_tests = len([r for r in self.results_data if r['all_correct_rate'] >= 0.8])
-            good_tests = len([r for r in self.results_data if 0.5 <= r['all_correct_rate'] < 0.8])
-
-            print(f"\n📊 PERFORMANCE BREAKDOWN:")
-            print("─" * 40)
-            print(f"🎯 Excellent (≥80%): {excellent_tests:2d} tests")
-            print(f"✅ Good (50-79%):   {good_tests:2d} tests")
-            print(f"⚠️  Some success:    {successful_tests - excellent_tests - good_tests:2d} tests")
-            print(f"❌ No success:      {len(self.results_data) - successful_tests:2d} tests")
-            print(f"📈 Overall success rate: {successful_tests / len(self.results_data):.1%}")
-            print(f"⚡ Average time per test: {self.format_duration(total_duration / total_combinations)}")
-
-            # Template timing breakdown
-            print(f"\n🕐 TEMPLATE PERFORMANCE:")
-            print("─" * 50)
-            for template in templates_to_use:
-                template_time = self._timing.get_template_duration(template)
-                avg_per_problem = template_time / len(problems_to_use)
-                template_results = [r for r in self.results_data if r['template'] == template]
-                avg_success = sum(r['all_correct_rate'] for r in template_results) / len(template_results) if template_results else 0
-
-                print(f"📝 {template[:40]:40s}")
-                print(f"    ⏱️  {self.format_duration(template_time):>10s} (avg: {self.format_duration(avg_per_problem):>8s}/problem)")
-                print(f"    📊 {avg_success:>9.1%} average success rate")
-
-        # LLM usage statistics
-        if self.all_llm_responses:
-            print(f"\n🤖 LLM USAGE STATISTICS:")
-            print("─" * 30)
-            provider_counts = Counter([response.provider for response in self.all_llm_responses])
-            for provider, count in provider_counts.items():
-                print(f"    🔗 {provider}: {count} calls")
-
-            token_usages = [response.usage.total_tokens for response in self.all_llm_responses]
-            print(f"    🎯 Max tokens: {max(token_usages):,}")
-            print(f"    📊 Median tokens: {sorted(token_usages)[len(token_usages)//2]:,}")
-            print(f"    📈 Total tokens: {sum(token_usages):,}")
-
-        print("=" * 75)
-        self.log_timestamp("🎉 EXPERIMENT COMPLETED! 🎉")
+        # Final summary
+        self._print_final_summary(total_duration, total_combinations, templates_to_use, problems_to_use)
 
         # Generate failure summary if there were any failures
         if self.failed_experiments:
