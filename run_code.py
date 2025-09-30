@@ -8,6 +8,8 @@ python run_code.py -p 9565186b -c example_solutions/ex_soln_9565186b.py
 
 import copy
 import pickle
+import re
+import textwrap
 
 import joblib
 import numpy as np
@@ -16,7 +18,52 @@ import utils
 from utils import ExecutionOutcome, RunResult
 
 
+def sanitize_code(code_string):
+    """Clean up common LLM artifacts from generated code.
+    
+    Args:
+        code_string: Raw code string from LLM
+        
+    Returns:
+        Cleaned code string ready for execution
+    """
+    if not code_string:
+        return code_string
+    
+    # Remove common Unicode characters that aren't valid Python
+    # → (right arrow), ← (left arrow), etc.
+    unicode_replacements = {
+        '→': '->',  # Right arrow to ->
+        '←': '<-',  # Left arrow (though not valid Python either)
+        '⇒': '=>',  # Double arrow
+        '…': '...',  # Ellipsis
+        '\u201c': '"',   # Left smart double quote to regular quote
+        '\u201d': '"',   # Right smart double quote to regular quote
+        '\u2018': "'",   # Left smart single quote to regular quote
+        '\u2019': "'",   # Right smart single quote to regular quote
+        '–': '-',   # En dash to hyphen
+        '—': '-',   # Em dash to hyphen
+    }
+    
+    for unicode_char, replacement in unicode_replacements.items():
+        code_string = code_string.replace(unicode_char, replacement)
+    
+    # Remove any remaining non-ASCII characters that might cause issues
+    # but preserve common ones like é, ñ in comments
+    # This is conservative - only remove characters that are definitely problematic
+    code_string = re.sub(r'[\u2190-\u21FF]', '', code_string)  # Remove arrows and technical symbols
+    
+    # Fix common indentation issues - dedent to normalize
+    try:
+        code_string = textwrap.dedent(code_string)
+    except Exception:
+        pass  # If dedent fails, continue with original
+    
+    return code_string
+
+
 def exec_and_run(code_as_line, initial):
+    # Note: code_as_line is already sanitized in execute_transform before being passed here
     code_as_line = "import numpy as np\n" + code_as_line
     # import numpy as np
     # if numpy not in globals (outside of this fn) then
@@ -48,6 +95,9 @@ def execute_transform(code_as_line, problems):
     exception_message = None  # None if no exception raised
 
     try:
+        # Sanitize the code to remove common LLM artifacts
+        code_as_line = sanitize_code(code_as_line)
+        
         exec(code_as_line, globals())  # try to generate transform function
         # transform # check if transform is in namespace
         # print(f"transform in namespace: {'transform' in dir()}")
@@ -125,6 +175,7 @@ def execute_transform(code_as_line, problems):
         code_ran_on_all_inputs = True  # note that we correctly ran on all inputs
     except (
         SyntaxError,
+        IndentationError,
         AttributeError,
         TypeError,
         KeyError,
@@ -140,6 +191,14 @@ def execute_transform(code_as_line, problems):
     ) as e:
         exception_message = f"execute_transform caught: {e} of {type(e)=}"
         print(exception_message)
+        
+        # For syntax/indentation errors, show the problematic code for debugging
+        if isinstance(e, (SyntaxError, IndentationError)):
+            print(f"Problematic code (first 500 chars):\n{code_as_line[:500]}")
+            if hasattr(e, 'lineno') and e.lineno:
+                lines = code_as_line.split('\n')
+                if e.lineno <= len(lines):
+                    print(f"Error at line {e.lineno}: {lines[e.lineno - 1]}")
         # print(e, type(e))
         # pprint.pprint(code_as_line)
 

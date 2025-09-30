@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 import utils
-from run_code import exec_and_run, execute_transform
+from run_code import exec_and_run, execute_transform, sanitize_code
 
 CODE_1 = """
 def transform(initial):
@@ -294,3 +294,43 @@ def test_execute_transform_weird_results():
     assert rr.transform_ran_and_matched_for_all_inputs is False
     assert rr.transform_ran_and_matched_at_least_once is False
     assert rr.transform_ran_and_matched_score == 0
+
+
+def test_sanitize_code_removes_unicode_arrows():
+    """Test that Unicode arrow characters are replaced"""
+    code = "def transform(x):\n    # x → y\n    return x"
+    result = sanitize_code(code)
+    assert "→" not in result
+    assert "->" in result
+
+
+def test_sanitize_code_removes_smart_quotes():
+    """Test that smart quotes are replaced with regular quotes"""
+    # Use actual Unicode smart quote characters
+    code = 'def transform(x):\n    s = \u201chello\u201d\n    return x'
+    result = sanitize_code(code)
+    assert '\u201c' not in result  # Left smart quote removed
+    assert '\u201d' not in result  # Right smart quote removed
+    assert '"' in result  # Regular quotes present
+
+
+def test_sanitize_code_handles_empty():
+    """Test that empty/None code is handled gracefully"""
+    assert sanitize_code("") == ""
+    assert sanitize_code(None) is None
+
+
+def test_sanitize_code_dedents():
+    """Test that indented code blocks are dedented"""
+    code = "    def transform(x):\n        return x"
+    result = sanitize_code(code)
+    # After dedent, should start at column 0
+    assert result.startswith("def transform")
+
+
+def test_sanitize_code_preserves_valid_code():
+    """Test that valid Python code is not mangled"""
+    code = "def transform(x):\n    return x * 2"
+    result = sanitize_code(code)
+    assert "def transform(x):" in result
+    assert "return x * 2" in result
