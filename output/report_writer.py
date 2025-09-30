@@ -112,38 +112,3 @@ class ReportWriter:
     def blank_line(self) -> None:
         """Write a blank line."""
         self._file.write("\n")
-
-
-class ConsoleReporter:
-    """
-    Single responsibility: Format console output consistently.
-
-    Provides similar methods to ReportWriter but for console output.
-    """
-
-    def __init__(self, width: int = 80):
-        """Initialize console reporter."""
-        self._width = width
-
-    def section_header(self, title: str, char: str = "=") -> None:
-        """Print a major section header to console."""
-        print("\n" + char * self._width)
-        print(title)
-        print(char * self._width)
-
-    def section_separator(self, char: str = "=") -> None:
-        """Print a section separator line."""
-        print(char * self._width)
-
-    def subsection_header(self, title: str, width: int = 50) -> None:
-        """Print a subsection header."""
-        print(f"\n{title}")
-        print("─" * width)
-
-    def subsection_separator(self, width: int = 50) -> None:
-        """Print a subsection separator."""
-        print("─" * width)
-
-    def blank_line(self) -> None:
-        """Print a blank line."""
-        print()
