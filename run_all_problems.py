@@ -49,22 +49,23 @@ from analysis.statistics_aggregator import (
     BestTemplateRecommender
 )
 from output.report_writer import ReportWriter, ConsoleReporter
+from core.timing_tracker import TimingTracker
 
 
 class BatchExperimentRunner:
     """Main class for running batch experiments with comprehensive tracking."""
 
     def __init__(self):
-        self.timing_data: Dict[str, float] = {}
-        self.template_timings: Dict[str, float] = {}
-        self.individual_timings: Dict[str, float] = {}
-        self.problem_timings: Dict[str, float] = {}
+        # Timing tracking (Iteration 4 refactoring: consolidated 6 variables into 1)
+        self._timing = TimingTracker()
+
+        # Experiment data and results
         self.results_data: List[Dict[str, Any]] = []
         self.all_llm_responses: List[Any] = []
-        self.global_start_time: float = 0
-        self.global_end_time: float = 0
         self.failed_experiments: List[Dict[str, Any]] = []
         self.total_experiments_attempted: int = 0
+
+        # File handle for logging
         self.log_file_handle = None
 
     def parse_arguments(self) -> argparse.Namespace:
@@ -335,7 +336,7 @@ Examples:
             individual_duration = individual_end_time - individual_start_time
 
             # Store timing
-            self.individual_timings[f"{template}|{problem}"] = individual_duration
+            self._timing.record_individual_duration(template, problem, individual_duration)
 
             formatted_duration = self.format_duration(individual_duration)
             self.log_timestamp(f"Individual test completed successfully in {formatted_duration}")
@@ -347,7 +348,7 @@ Examples:
             individual_duration = individual_end_time - individual_start_time
 
             # Store timing even for failures
-            self.individual_timings[f"{template}|{problem}"] = individual_duration
+            self._timing.record_individual_duration(template, problem, individual_duration)
 
             # Record the failure
             self.failed_experiments.append({
@@ -452,8 +453,8 @@ Examples:
             "at_least_one_correct": at_least_one_correct,
             "all_correct_rate": all_correct_rate,
             "at_least_one_correct_rate": at_least_one_rate,
-            "individual_duration": self.individual_timings.get(f"{template}|{problem}", 0),
-            "problem_duration": self.problem_timings.get(f"{template}|{problem}", 0),
+            "individual_duration": self._timing.get_individual_duration(template, problem),
+            "problem_duration": self._timing.get_problem_duration(template, problem),
         }
 
     def generate_console_table(self) -> None:
@@ -554,7 +555,7 @@ Examples:
         timestamp = output_dir.name
         html_file = output_dir / f"batch_results_{timestamp}.html"
 
-        total_duration = self.global_end_time - self.global_start_time
+        total_duration = self._timing.get_global_duration()
 
         html_content = f"""
 <!DOCTYPE html>
@@ -1112,7 +1113,7 @@ Examples:
             f.write("=" * 80 + "\n")
             f.write("🧠  ARC-AGI BATCH EXPERIMENT SUMMARY  🧠\n")
             f.write("=" * 80 + "\n\n")
-            f.write(f"📅 Experiment started: {datetime.fromtimestamp(self.global_start_time).strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write(f"📅 Experiment started: {self._timing.format_global_start()}\n\n")
             f.write("📋 CONFIGURATION:\n")
             f.write("─" * 40 + "\n")
             f.write(f"  🔧 Method: method1_text_prompt\n")
@@ -1141,7 +1142,7 @@ Examples:
             f.write("=" * 80 + "\n")
             f.write("🎉  EXPERIMENT COMPLETED  🎉\n")
             f.write("=" * 80 + "\n\n")
-            f.write(f"📅 Completed at: {datetime.fromtimestamp(self.global_end_time).strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"📅 Completed at: {self._timing.format_global_end()}\n")
             f.write(f"⏱️  Total duration: {self.format_duration(total_duration)}\n\n")
 
             if self.results_data:
@@ -1155,29 +1156,20 @@ Examples:
                 f.write("🕐 TEMPLATE TIMING BREAKDOWN:\n")
                 f.write("─" * 40 + "\n")
                 for template in templates_to_use:
-                    template_time = self.template_timings.get(template, 0)
+                    template_time = self._timing.get_template_duration(template)
                     f.write(f"  📝 {template}: {self.format_duration(template_time)}\n")
             f.write("\n" + "=" * 80 + "\n")
 
         return str(summary_log)
 
-    def run_batch_experiments(self, args: argparse.Namespace) -> None:
-        """Main execution method with comprehensive tracking."""
-        # Record global start time
-        self.global_start_time = time.time()
+    def _print_experiment_configuration(
+        self, args: argparse.Namespace, templates_to_use: List[str], problems_to_use: List[str]
+    ) -> int:
+        """
+        Print experiment configuration. Returns total_combinations.
 
-        # Stylish header
-        print("\n" + "=" * 80)
-        print("🧠  ARC-AGI BATCH EXPERIMENT RUNNER  🧠")
-        print("=" * 80)
-        self.log_timestamp("🚀 EXPERIMENT STARTED")
-
-        # Resolve selections
-        self.log_timestamp("🔍 Resolving template and problem selections...")
-        templates_to_use = self.resolve_templates(args.templates)
-        problems_to_use = self.resolve_problems(args.problems)
-
-        # Configuration display with better formatting
+        Following Object Calisthenics Rule 7: Small focused methods.
+        """
         print(f"\n📋 EXPERIMENT CONFIGURATION")
         print("─" * 50)
         print(f"  🔧 Method Module: {args.method}")
@@ -1192,16 +1184,22 @@ Examples:
         for i, problem in enumerate(problems_to_use):
             print(f"    {i+1}. {problem}")
 
-        # Calculate total combinations
         total_combinations = len(templates_to_use) * len(problems_to_use)
         print(f"\n🧮 Total test combinations: {total_combinations}")
         print("─" * 50)
         self.log_timestamp(f"✅ Configuration complete. Starting {total_combinations} test combinations.")
+        return total_combinations
 
-        # Create timestamp-based output directory and setup logging
+    def _setup_output_directory(self, args: argparse.Namespace) -> Tuple[Path, str]:
+        """
+        Setup output directory and logging. Returns (output_dir, timestamp).
+
+        Following Object Calisthenics Rule 7: Small focused methods.
+        """
         base_output_dir = Path(args.output_dir)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir = base_output_dir / timestamp
+
         if not args.dry_run:
             output_dir.mkdir(parents=True, exist_ok=True)
             print(f"\n💾 Results will be saved to: {output_dir}")
@@ -1212,21 +1210,40 @@ Examples:
             self.log_timestamp(f"Logging to: {log_file}")
             print(f"📝 Detailed log: {log_file.name}")
 
-        # Load method module
-        if not args.dry_run:
-            try:
-                method_module = importlib.import_module(args.method)
-                print(f"Using module: {method_module.__file__}")
-                print(f"Using entry point: {method_module.run_experiment_for_iterations.__name__}")
-            except ImportError as e:
-                print(f"Error importing method module '{args.method}': {e}")
-                if self.log_file_handle:
-                    self.log_file_handle.close()
-                return
-        else:
-            method_module = None
+        return output_dir, timestamp
 
-        # Run pre-flight validation
+    def _load_method_module(self, args: argparse.Namespace) -> Optional[Any]:
+        """
+        Load and validate method module. Returns module or None.
+
+        Following Object Calisthenics Rule 7: Small focused methods.
+        """
+        if args.dry_run:
+            return None
+
+        try:
+            method_module = importlib.import_module(args.method)
+            print(f"Using module: {method_module.__file__}")
+            print(f"Using entry point: {method_module.run_experiment_for_iterations.__name__}")
+            return method_module
+        except ImportError as e:
+            print(f"Error importing method module '{args.method}': {e}")
+            if self.log_file_handle:
+                self.log_file_handle.close()
+            return None
+
+    def _run_preflight_validation(
+        self,
+        templates_to_use: List[str],
+        problems_to_use: List[str],
+        method_module: Any,
+        args: argparse.Namespace
+    ) -> bool:
+        """
+        Run pre-flight validation. Returns True if passed.
+
+        Following Object Calisthenics Rule 7: Small focused methods.
+        """
         print(f"\n{'='*80}")
         print("🔍 PRE-FLIGHT VALIDATION")
         print(f"{'='*80}")
@@ -1242,9 +1259,41 @@ Examples:
                 for error in validation_errors:
                     self.log_file_handle.write(f"  - {error}\n")
                 self.log_file_handle.close()
-            return
+            return False
 
         print(f"{'='*80}\n")
+        return True
+
+    def run_batch_experiments(self, args: argparse.Namespace) -> None:
+        """Main execution method with comprehensive tracking."""
+        # Record global start time
+        self._timing.start_global()
+
+        # Stylish header
+        print("\n" + "=" * 80)
+        print("🧠  ARC-AGI BATCH EXPERIMENT RUNNER  🧠")
+        print("=" * 80)
+        self.log_timestamp("🚀 EXPERIMENT STARTED")
+
+        # Resolve selections
+        self.log_timestamp("🔍 Resolving template and problem selections...")
+        templates_to_use = self.resolve_templates(args.templates)
+        problems_to_use = self.resolve_problems(args.problems)
+
+        # Display configuration (extracted method)
+        total_combinations = self._print_experiment_configuration(args, templates_to_use, problems_to_use)
+
+        # Setup output directory and logging (extracted method)
+        output_dir, timestamp = self._setup_output_directory(args)
+
+        # Load method module (extracted method)
+        method_module = self._load_method_module(args)
+        if method_module is None and not args.dry_run:
+            return
+
+        # Run pre-flight validation (extracted method)
+        if not self._run_preflight_validation(templates_to_use, problems_to_use, method_module, args):
+            return
 
         # Execute experiments with branching timing
         current_test = 0
@@ -1312,7 +1361,7 @@ Examples:
                 # Problem-level timing summary
                 problem_end_time = time.time()
                 problem_duration = problem_end_time - problem_start_time
-                self.problem_timings[f"{template}|{problem}"] = problem_duration
+                self._timing.record_problem_duration(template, problem, problem_duration)
 
                 formatted_duration = self.format_duration(problem_duration)
                 self.log_timestamp(f"✅ Problem completed: {problem} in {formatted_duration}")
@@ -1320,7 +1369,7 @@ Examples:
             # Template-level timing summary
             template_end_time = time.time()
             template_duration = template_end_time - template_start_time
-            self.template_timings[template] = template_duration
+            self._timing.record_template_duration(template, template_duration)
 
             formatted_duration = self.format_duration(template_duration)
             self.log_timestamp(f"🏁 Template branch completed: {template} in {formatted_duration} ({len(problems_to_use)} problems)")
@@ -1349,8 +1398,8 @@ Examples:
                     print("─" * 65)
 
         # Record global end time
-        self.global_end_time = time.time()
-        total_duration = self.global_end_time - self.global_start_time
+        self._timing.end_global()
+        total_duration = self._timing.get_global_duration()
 
         self.log_timestamp("🎉 All tests completed. Generating results...")
 
@@ -1414,8 +1463,8 @@ Examples:
         print(f"\n🏆 " + "=" * 70)
         print(f"🎉 FINAL EXPERIMENT SUMMARY 🎉")
         print("=" * 75)
-        print(f"⏰ Start Time:  {datetime.fromtimestamp(self.global_start_time).strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"🏁 End Time:    {datetime.fromtimestamp(self.global_end_time).strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"⏰ Start Time:  {self._timing.format_global_start()}")
+        print(f"🏁 End Time:    {self._timing.format_global_end()}")
         print(f"⏱️  Duration:    {self.format_duration(total_duration)}")
         print(f"🧮 Total tests: {total_combinations}")
 
@@ -1437,7 +1486,7 @@ Examples:
             print(f"\n🕐 TEMPLATE PERFORMANCE:")
             print("─" * 50)
             for template in templates_to_use:
-                template_time = self.template_timings.get(template, 0)
+                template_time = self._timing.get_template_duration(template)
                 avg_per_problem = template_time / len(problems_to_use)
                 template_results = [r for r in self.results_data if r['template'] == template]
                 avg_success = sum(r['all_correct_rate'] for r in template_results) / len(template_results) if template_results else 0
