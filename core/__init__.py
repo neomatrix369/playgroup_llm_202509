@@ -7,6 +7,7 @@ from core.experiment_validator import ExperimentValidator
 from core.experiment_loop_orchestrator import ExperimentLoopOrchestrator, ProgressTracker
 from core.service_registry import ServiceRegistry, ServiceFactory
 from core.experiment_coordinator import ExperimentCoordinator
+from core.checkpoint_manager import CheckpointManager, ExperimentCheckpoint
 
 __all__ = [
     'TimingTracker',
@@ -17,5 +18,7 @@ __all__ = [
     'ProgressTracker',
     'ServiceRegistry',
     'ServiceFactory',
-    'ExperimentCoordinator'
+    'ExperimentCoordinator',
+    'CheckpointManager',
+    'ExperimentCheckpoint'
 ]

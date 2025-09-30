@@ -122,7 +122,8 @@ class ServiceFactory:
         generate_ranking_analysis_callback: Callable,
         generate_persistent_summary_callback: Callable,
         thresholds: SuccessThresholds,
-        log_file_handle_accessor: Callable[[], Any]
+        log_file_handle_accessor: Callable[[], Any],
+        checkpoint_manager_accessor: Callable[[], Optional[Any]] = lambda: None
     ):
         """Initialize factory with required dependencies."""
         self.timing = timing_tracker
@@ -135,6 +136,7 @@ class ServiceFactory:
         self.generate_persistent_summary = generate_persistent_summary_callback
         self.thresholds = thresholds
         self.log_file_handle_accessor = log_file_handle_accessor
+        self.checkpoint_manager_accessor = checkpoint_manager_accessor
     
     def create_output_generator(self) -> 'OutputGenerator':
         """Create OutputGenerator instance."""
@@ -189,5 +191,6 @@ class ServiceFactory:
             format_duration_callback=self.format_duration,
             run_experiment_callback=self.run_experiment,
             analyze_results_callback=self.analyze_results,
+            checkpoint_manager=self.checkpoint_manager_accessor(),
             success_thresholds=self.thresholds
         )

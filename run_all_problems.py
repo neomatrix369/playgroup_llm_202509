@@ -59,6 +59,7 @@ from core.experiment_validator import ExperimentValidator
 from core.experiment_loop_orchestrator import ExperimentLoopOrchestrator
 from core.service_registry import ServiceRegistry, ServiceFactory
 from core.experiment_coordinator import ExperimentCoordinator
+from core.checkpoint_manager import CheckpointManager, ExperimentCheckpoint
 from domain.value_objects import SuccessThresholds
 from domain.experiment_state import ExperimentResults, ExperimentContext
 
@@ -71,18 +72,20 @@ class BatchExperimentRunner:
         Initialize batch experiment runner.
         
         Following Object Calisthenics Rule 8: Maximum 2 instance variables.
-        Reduced from 14 instance variables to 5 by using cohesive objects:
+        Reduced from 14 instance variables to 6 by using cohesive objects:
         - _timing: Timing operations
         - _results: All results data (was 4 variables)
         - _context: Execution context (was 2 variables)
         - _services: All services (was 7 variables)
         - _thresholds: Success thresholds
+        - _checkpoint_manager: Checkpoint manager for resume support
         """
-        # Core infrastructure (5 instance variables total)
+        # Core infrastructure (6 instance variables total)
         self._timing = TimingTracker()
         self._results = ExperimentResults()
         self._context = ExperimentContext()
         self._thresholds = SuccessThresholds()
+        self._checkpoint_manager: Optional[CheckpointManager] = None
         
         # Service registry (consolidates 7 lazy-initialized services)
         factory = self._create_service_factory()
@@ -144,6 +147,14 @@ Examples:
                           help="Analyze existing experiment results and generate/update summary statistics")
         parser.add_argument("--fail-fast", action="store_true",
                           help="Stop execution on first error (default: continue through all experiments)")
+        
+        # Checkpoint and resume
+        parser.add_argument("--no-checkpoint", action="store_true",
+                          help="Disable automatic checkpoint saving (checkpoints enabled by default)")
+        parser.add_argument("--resume", action="store_true",
+                          help="Force resume from last checkpoint (auto-prompts by default)")
+        parser.add_argument("--no-resume", action="store_true",
+                          help="Start fresh, ignoring any existing checkpoints")
 
         return parser.parse_args()
 
@@ -194,7 +205,8 @@ Examples:
             generate_ranking_analysis_callback=ranking_callback,
             generate_persistent_summary_callback=self.generate_persistent_summary,
             thresholds=self._thresholds,
-            log_file_handle_accessor=lambda: self._context.log_handle
+            log_file_handle_accessor=lambda: self._context.log_handle,
+            checkpoint_manager_accessor=lambda: self._checkpoint_manager
         )
 
     def validate_prerequisites(self, templates_to_use: List[str], problems_to_use: List[str], method_module: Any, args: argparse.Namespace) -> Tuple[bool, List[str]]:
@@ -483,6 +495,24 @@ Examples:
         # Setup output directory and logging (extracted method)
         output_dir, timestamp = self._setup_output_directory(args)
 
+        # Setup checkpoint manager (unless disabled)
+        if not args.no_checkpoint:
+            self._checkpoint_manager = CheckpointManager(output_dir)
+            
+            # Handle checkpoint resume logic
+            if not args.no_resume:
+                checkpoint = self._checkpoint_manager.load_checkpoint()
+                if checkpoint:
+                    # Auto-prompt or force-resume based on flags
+                    should_resume = args.resume or CheckpointManager.prompt_resume_from_checkpoint(checkpoint)
+                    
+                    if should_resume:
+                        self.log_timestamp("✅ Resuming from previous checkpoint")
+                        # Note: The actual restore happens in the orchestrator's execute_loop
+                    else:
+                        self.log_timestamp("🔄 Starting fresh (checkpoint ignored)")
+                        self._checkpoint_manager.delete_checkpoint()
+
         # Load method module (extracted method)
         method_module = self._load_method_module(args)
         if method_module is None and not args.dry_run:
@@ -493,7 +523,7 @@ Examples:
             return
 
         # Execute experiments using orchestrator (removes 100+ lines of procedural code)
-        orchestrator = self._get_loop_orchestrator()
+        orchestrator = self._services.loop_orchestrator()
         loop_result = orchestrator.execute_loop(
             templates_to_use, problems_to_use, method_module, args, output_dir
         )

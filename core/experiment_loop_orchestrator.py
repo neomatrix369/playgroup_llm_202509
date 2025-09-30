@@ -9,16 +9,19 @@ Following SOLID principles:
 - Single Responsibility: Only handles the experiment loop execution
 - Dependency Inversion: Depends on abstractions (callbacks)
 - Open/Closed: Easy to extend loop behavior without modification
+
+Includes checkpoint/resume support for interrupted experiments.
 """
 
 import time
 from pathlib import Path
-from typing import List, Dict, Any, Callable, Optional
+from typing import List, Dict, Any, Callable, Optional, Tuple, Set
 import argparse
 import traceback
 
 from domain.value_objects import SuccessThresholds
 from core.timing_tracker import TimingTracker
+from core.checkpoint_manager import CheckpointManager, ExperimentCheckpoint
 
 
 class ProgressTracker:
@@ -70,6 +73,7 @@ class ExperimentLoopOrchestrator:
         format_duration_callback: Callable[[float], str],
         run_experiment_callback: Callable,
         analyze_results_callback: Callable,
+        checkpoint_manager: Optional[CheckpointManager] = None,
         success_thresholds: SuccessThresholds = SuccessThresholds()
     ):
         """Initialize the experiment loop orchestrator.
@@ -80,6 +84,7 @@ class ExperimentLoopOrchestrator:
             format_duration_callback: Function to format duration in human-readable format
             run_experiment_callback: Callback to run a single experiment
             analyze_results_callback: Callback to analyze experiment results
+            checkpoint_manager: Optional checkpoint manager for resume support
             success_thresholds: Thresholds for success evaluation (removes magic numbers)
         """
         self.timing = timing_tracker
@@ -87,12 +92,20 @@ class ExperimentLoopOrchestrator:
         self.format_duration = format_duration_callback
         self.run_experiment = run_experiment_callback
         self.analyze_results = analyze_results_callback
+        self.checkpoint_manager = checkpoint_manager
         self.thresholds = success_thresholds
         
         # State to be collected during loop
         self.results_data: List[Dict[str, Any]] = []
         self.all_llm_responses: List[Any] = []
         self.failed_experiments: List[Dict[str, Any]] = []
+        self.completed_experiments: Set[Tuple[str, str]] = set()
+        
+        # Timing for checkpoint
+        self.start_time: float = time.time()
+        self.current_templates: List[str] = []
+        self.current_problems: List[str] = []
+        self.current_args: Optional[argparse.Namespace] = None
     
     def execute_loop(
         self,
@@ -118,8 +131,20 @@ class ExperimentLoopOrchestrator:
                 - failed_experiments: List of failed experiments
                 - completed: Boolean indicating successful completion
         """
+        # Store for checkpoint creation
+        self.current_templates = templates
+        self.current_problems = problems
+        self.current_args = args
+        self.start_time = time.time()
+        
         total_combinations = len(templates) * len(problems)
         progress = ProgressTracker(total_combinations)
+        
+        # Load checkpoint if resuming
+        if self.checkpoint_manager:
+            checkpoint = self.checkpoint_manager.load_checkpoint()
+            if checkpoint:
+                self._restore_from_checkpoint(checkpoint, progress)
         
         # Template-level loop
         for template in templates:
@@ -127,7 +152,12 @@ class ExperimentLoopOrchestrator:
                 template, problems, method_module, args, output_dir, progress
             ):
                 # Failed with fail-fast
+                self._save_checkpoint_if_enabled(output_dir)
                 return self._build_result_dict(completed=False)
+        
+        # Clean up checkpoint on successful completion
+        if self.checkpoint_manager:
+            self.checkpoint_manager.archive_checkpoint()
         
         return self._build_result_dict(completed=True)
     
@@ -190,6 +220,12 @@ class ExperimentLoopOrchestrator:
         Returns:
             True if completed or should continue, False if should stop (fail-fast)
         """
+        # Skip if already completed (from checkpoint resume)
+        if (template, problem) in self.completed_experiments:
+            current_test = progress.increment()
+            print(f"  ⏭️  Skipping (already completed from checkpoint)")
+            return True
+        
         problem_start_time = time.time()
         current_test = progress.increment()
         
@@ -215,6 +251,10 @@ class ExperimentLoopOrchestrator:
                 self._print_result_feedback(result_analysis, args.dry_run)
             else:
                 print("  ✓ Test Completed (dry run)")
+            
+            # Mark as completed and save checkpoint
+            self.completed_experiments.add((template, problem))
+            self._save_checkpoint_if_enabled(output_dir)
         
         except Exception as e:
             if not self._handle_experiment_failure(
@@ -350,3 +390,61 @@ class ExperimentLoopOrchestrator:
             'failed_experiments': self.failed_experiments,
             'completed': completed
         }
+    
+    def _save_checkpoint_if_enabled(self, output_dir: Path) -> None:
+        """Save checkpoint if checkpoint manager is configured."""
+        if not self.checkpoint_manager or not self.current_args:
+            return
+        
+        # Convert args to dict (excluding non-serializable objects)
+        args_dict = {
+            'iterations': self.current_args.iterations,
+            'model': self.current_args.model,
+            'template': self.current_args.template if hasattr(self.current_args, 'template') else None,
+            'problem': self.current_args.problem if hasattr(self.current_args, 'problem') else None,
+            'dry_run': self.current_args.dry_run,
+            'verbose': self.current_args.verbose,
+            'fail_fast': self.current_args.fail_fast
+        }
+        
+        checkpoint = ExperimentCheckpoint(
+            output_dir=str(output_dir),
+            templates=self.current_templates,
+            problems=self.current_problems,
+            completed_experiments=list(self.completed_experiments),
+            results_data=self.results_data,
+            failed_experiments=self.failed_experiments,
+            start_time=self.start_time,
+            checkpoint_time=time.time(),
+            total_combinations=len(self.current_templates) * len(self.current_problems),
+            args_dict=args_dict
+        )
+        
+        self.checkpoint_manager.save_checkpoint(checkpoint)
+    
+    def _restore_from_checkpoint(self, checkpoint: ExperimentCheckpoint, progress: ProgressTracker) -> None:
+        """Restore state from checkpoint."""
+        self.log_timestamp("🔄 Resuming from checkpoint...")
+        
+        # Restore completed experiments
+        self.completed_experiments = set(checkpoint.completed_experiments)
+        
+        # Restore results
+        self.results_data = checkpoint.results_data
+        self.failed_experiments = checkpoint.failed_experiments
+        
+        # Update progress tracker
+        progress.current_test = len(checkpoint.completed_experiments)
+        
+        # Restore timing
+        self.start_time = checkpoint.start_time
+        
+        # Log resume info
+        next_exp = checkpoint.get_next_experiment()
+        if next_exp:
+            template, problem, test_num = next_exp
+            self.log_timestamp(
+                f"📍 Resuming from test {test_num}/{checkpoint.total_combinations}: {template} + {problem}"
+            )
+        
+        self.log_timestamp(f"✅ Restored {len(checkpoint.completed_experiments)} completed experiments")
