@@ -119,31 +119,6 @@ def extract_explanation(text):
         return ""  # return empty string if no explanation found
 
 
-def extract_json_from_response(response):
-    try:
-        container = json.loads(response)
-    except json.decoder.JSONDecodeError:
-        container = None
-    return container
-
-
-def make_list_of_lists(var, input):
-    return f"{var} = {repr(input)}"
-
-
-def parse_response_for_function(response):
-    capture = False
-    function_lines = []
-    for line in response.split("\n"):
-        if capture:
-            if not line.startswith("    "):
-                capture = False
-        if line.startswith("def "):
-            capture = True
-        if capture:
-            function_lines.append(line)
-    return function_lines
-
 
 def add_argument_parser(
     problem_name=False,
@@ -204,11 +179,6 @@ def add_argument_parser(
             default="/tmp/solution.py",
         )
     return parser
-
-
-def encode_image_to_base64(image_path):
-    with open(image_path, "rb") as image_file:
-        return base64.b64encode(image_file.read()).decode("utf-8")
 
 
 def make_experiment_folder(root_folder="experiments"):
