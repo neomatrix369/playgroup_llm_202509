@@ -8,11 +8,12 @@
 # from litellm import completion
 from dotenv import load_dotenv
 from tqdm import tqdm
+import logging
 
 from db import record_run
 from litellm_helper import call_llm, check_litellm_key, disable_litellm_logging
 from prompt import get_func_dict, make_prompt
-from run_code import execute_transform
+from run_code import execute_transform, should_request_regeneration
 from utils import (
     do_first_setup,
     do_last_report,
@@ -23,6 +24,9 @@ from utils import (
 disable_litellm_logging()
 
 load_dotenv()
+
+# Initialize logger - will be overridden by run_all_problems.py if used from there
+logger = logging.getLogger(__name__)
 
 
 prompt_for_python_code = """
@@ -110,6 +114,9 @@ def add_previous_explanations_to_messages(
 def ask_for_code_and_execute(
     model, prompt_to_describe_problem, explanation_response_as_text, llm_responses
 ):
+    MAX_RETRY_ATTEMPTS = 3
+    train_problems = problems["train"]
+
     # Build a new prompt using the most recent explanation (and not any historic bad explanations)
     messages_to_get_code = []
     messages_to_get_code.append(make_message_part(prompt_to_describe_problem, "user"))
@@ -117,14 +124,41 @@ def ask_for_code_and_execute(
     messages_to_get_code.append(
         make_message_part(explanation_response_as_text, "assistant")
     )
-    code_as_string = call_then_extract_code(model, messages_to_get_code, llm_responses)
 
-    # run the code
-    train_problems = problems["train"]
-    rr_train = execute_transform(code_as_string, train_problems)
+    # Retry loop for structural errors
+    for retry_attempt in range(MAX_RETRY_ATTEMPTS):
+        code_as_string = call_then_extract_code(model, messages_to_get_code, llm_responses)
+
+        # run the code
+        rr_train, execution_outcomes, exception_message = execute_transform(code_as_string, train_problems)
+
+        # Check if code regeneration is recommended
+        should_regen = False
+        if exception_message:
+            should_regen, regen_reason = should_request_regeneration(exception_message, code_as_string)
+            if should_regen:
+                logger.warning(f"Code regeneration recommended: {regen_reason} (attempt {retry_attempt + 1}/{MAX_RETRY_ATTEMPTS})")
+                logger.debug(f"Exception: {exception_message}")
+            else:
+                logger.info(f"Debugging preferred over regeneration: {regen_reason}")
+
+        # If structural error and retries remaining, try again with same prompt
+        if should_regen and retry_attempt < MAX_RETRY_ATTEMPTS - 1:
+            retry_msg = f"🔄 Retrying with same prompt (attempt {retry_attempt + 2}/{MAX_RETRY_ATTEMPTS})..."
+            logger.info(retry_msg)
+            print(retry_msg)  # Also print to console for visibility
+            continue
+
+        # Either success, non-structural error, or out of retries - break and record
+        if should_regen and retry_attempt == MAX_RETRY_ATTEMPTS - 1:
+            failure_msg = f"❌ Failed after {MAX_RETRY_ATTEMPTS} attempts, giving up on this reflexion iteration"
+            logger.error(failure_msg)
+            print(failure_msg)  # Also print to console for visibility
+        break
+
     logger.info("After executing the code, we get rr_train:")
     logger.info(rr_train)
-    return rr_train, code_as_string, messages_to_get_code
+    return rr_train, code_as_string, messages_to_get_code, execution_outcomes, exception_message
 
 
 def run_experiment(
@@ -173,14 +207,14 @@ def run_experiment(
         logger.info(explanation_response_as_text)
         previous_explanations.append(explanation_response_as_text)
 
-        rr_train, code_as_string, messages_to_get_code = ask_for_code_and_execute(
+        rr_train, code_as_string, messages_to_get_code, execution_outcomes, exception_message = ask_for_code_and_execute(
             model,
             prompt_to_describe_problem,
             explanation_response_as_text,
             llm_responses,
         )
 
-        success = rr_train[0].transform_ran_and_matched_for_all_inputs
+        success = rr_train.transform_ran_and_matched_for_all_inputs
         if success:
             logger.info(f"------> Success on reflexion iteration {reflexion_n}")
             break

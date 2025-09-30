@@ -11,7 +11,7 @@ import logging
 from db import record_run
 from litellm_helper import call_llm, check_litellm_key, disable_litellm_logging
 from prompt import get_func_dict, make_prompt
-from run_code import execute_transform
+from run_code import execute_transform, should_request_regeneration
 
 # from litellm import completion
 from utils import (
@@ -39,21 +39,50 @@ def run_experiment(
     rr_trains,
     llm_responses,
 ):
-    response, content = call_llm(model, messages)
-    llm_responses.append(response)
-    logger.info(f"Content: {content}")
-    messages_plus_response = messages + [make_message_part(content, "assistant")]
-
-    code_as_string = extract_from_code_block(content)
-    
-    # Handle case where no code block was found (after trying multiple extraction strategies)
-    if code_as_string is None:
-        code_as_string = ""
-        logger.warning("No code block found in LLM response after trying multiple extraction strategies")
-        logger.debug(f"LLM response content: {content[:500]}...")  # Log first 500 chars for debugging
-
+    MAX_RETRY_ATTEMPTS = 3
     train_problems = problems["train"]
-    rr_train = execute_transform(code_as_string, train_problems)
+
+    # Retry loop for structural errors
+    for retry_attempt in range(MAX_RETRY_ATTEMPTS):
+        response, content = call_llm(model, messages)
+        llm_responses.append(response)
+        logger.info(f"Content: {content}")
+        messages_plus_response = messages + [make_message_part(content, "assistant")]
+
+        code_as_string = extract_from_code_block(content)
+
+        # Handle case where no code block was found (after trying multiple extraction strategies)
+        if code_as_string is None:
+            code_as_string = ""
+            logger.warning("No code block found in LLM response after trying multiple extraction strategies")
+            logger.debug(f"LLM response content: {content[:500]}...")  # Log first 500 chars for debugging
+
+        rr_train, execution_outcomes, exception_message = execute_transform(code_as_string, train_problems)
+
+        # Check if code regeneration is recommended
+        should_regen = False
+        if exception_message:
+            should_regen, regen_reason = should_request_regeneration(exception_message, code_as_string)
+            if should_regen:
+                logger.warning(f"Code regeneration recommended: {regen_reason} (attempt {retry_attempt + 1}/{MAX_RETRY_ATTEMPTS})")
+                logger.debug(f"Exception: {exception_message}")
+            else:
+                logger.info(f"Debugging preferred over regeneration: {regen_reason}")
+
+        # If structural error and retries remaining, try again with same prompt
+        if should_regen and retry_attempt < MAX_RETRY_ATTEMPTS - 1:
+            retry_msg = f"🔄 Retrying with same prompt (attempt {retry_attempt + 2}/{MAX_RETRY_ATTEMPTS})..."
+            logger.info(retry_msg)
+            print(retry_msg)  # Also print to console for visibility
+            continue
+
+        # Either success, non-structural error, or out of retries - break and record
+        if should_regen and retry_attempt == MAX_RETRY_ATTEMPTS - 1:
+            failure_msg = f"❌ Failed after {MAX_RETRY_ATTEMPTS} attempts, giving up on this iteration"
+            logger.error(failure_msg)
+            print(failure_msg)  # Also print to console for visibility
+        break
+
     explanation = extract_explanation(content)
     record_run(
         db_filename,
@@ -61,10 +90,10 @@ def run_experiment(
         explanation,
         code_as_string,
         messages_plus_response,
-        rr_train[0].transform_ran_and_matched_for_all_inputs,
+        rr_train.transform_ran_and_matched_for_all_inputs,
     )
     logger.info(f"RR train: {rr_train}")
-    rr_trains.append(rr_train)
+    rr_trains.append((rr_train, execution_outcomes, exception_message))
 
 
 def run_experiment_for_iterations(

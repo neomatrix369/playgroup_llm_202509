@@ -64,10 +64,24 @@ sqlite3> select final_explanation from experiments where all_train_transformed_c
 Note if it got an explanation right, but wrote bad code (e.g. with a SyntaxError), then it won't transform correctly
 
 # In method1's run_experiment function we receive an object after trying a proposed solution
-# rr_train is a tuple of (RunResult, ExecutionOutcome, exception_message)
-# rr_train[0].code_ran_on_all_inputs will be True if all train examples ran regardless of output quality
-# rr_train[0].transform_ran_and_matched_for_all_inputs will be True if all train inputs were transformed correctly
-# rr_train[1] gives an ExecutionOutcome object, for each initial/final pair it shows what the transform function generated
+# execute_transform() returns a tuple of (RunResult, ExecutionOutcomes, exception_message)
+# - RunResult: code_ran_on_all_inputs, transform_ran_and_matched_for_all_inputs, etc.
+# - ExecutionOutcomes: list of ExecutionOutcome objects, one per train example
+# - exception_message: error details if execution failed, None otherwise
+#
+# Automatic Code Regeneration with Retry Logic:
+# The should_request_regeneration() function analyzes exceptions to categorize errors:
+# - STRUCTURAL errors (missing transform, wrong signature, data instead of code): AUTO-RETRY
+# - LOGIC errors (AssertionError, IndexError, ZeroDivisionError): NO RETRY (needs debugging)
+# - SYNTAX errors: AUTO-RETRY if severe (code too short), otherwise debugging preferred
+#
+# When structural errors occur, the system automatically retries up to 3 times:
+# 1. Attempt 1: Initial LLM call returns bad code → structural error detected
+# 2. Attempt 2: Retry same prompt → system logs "Retrying (attempt 2/3)..."
+# 3. Attempt 3: Final retry → if still fails, logs "Failed after 3 attempts, giving up"
+# 4. System continues to next iteration (does not block entire experiment)
+#
+# This prevents wasted iterations on structural failures like LLM returning data instead of code.
 ```
 
 ## Batch Experiment Runner
@@ -119,11 +133,38 @@ Results are saved in timestamped directories under `batch_results/` containing:
 
 ### Recent Improvements
 
-The batch runner has been enhanced with robust error handling:
+#### Code Quality and Architecture (2025-09)
+- **Object Calisthenics Refactoring**: Extracted 16+ classes following SOLID principles for better maintainability
+  - ExperimentArgumentParser, ExperimentExecutor, ExperimentAggregator, ExperimentSummarizer
+  - ExperimentCoordinator, TimingTracker, ExperimentResults, ExperimentContext
+  - 64.7% code reduction in main orchestrator (1,647 → 582 lines)
+- **Automatic Code Regeneration**: Intelligent LLM output validation with automatic retry (up to 3 attempts)
+  - Detects when LLM returns data instead of code
+  - Categorizes errors: STRUCTURAL (auto-retry), LOGIC (debug), SYNTAX (context-dependent)
+  - Retries same prompt automatically for structural failures
+  - Prevents wasted experiment iterations on malformed code
+  - Sanitizes Unicode artifacts (arrows →, smart quotes "", etc.)
+- **Type Safety**: Enforces np.ndarray return type from transform functions (rejects lists/primitives)
+
+#### Checkpoint and Resume System
+- **Interrupted Experiment Recovery**: Resume long-running batch experiments from last checkpoint
+  - Automatic checkpoint creation every N experiments
+  - Retroactive checkpoint creation for interrupted runs
+  - Detailed progress display showing completed vs pending work
+  - Prevents duplicate execution and maintains result integrity
+
+#### Robust Error Handling
 - **Fixed file path handling**: Resolves "'str' object has no attribute 'name'" errors
 - **Improved execution resilience**: Fallback to serial execution when parallel processing fails
+- **Multi-strategy code extraction**: 3-tier fallback for extracting code from LLM responses
 - **Better dependency management**: Added missing scikit-image dependency
-- **Enhanced logging**: Proper logger initialization across modules 
+- **Enhanced logging**: Proper logger initialization across modules
+
+#### Testing
+- **Core functionality tests**: `test_run_code.py` - Code execution, validation, sanitization
+- **Retry logic tests**: `test_retry_logic.py` - Automatic regeneration on structural errors
+- **Run tests**: `pytest` or `pytest test_retry_logic.py -v` for specific test files
+- **Coverage report**: `python -m pytest --cov=. --cov-report=html` (view with `open htmlcov/index.html`) 
 
 Now compare this to the EXPT (experiments) results - Ian on screen - better prompt sort of gets us further.
 
