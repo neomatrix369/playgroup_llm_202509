@@ -47,6 +47,7 @@ from analysis.statistics_aggregator import (
     BestTemplateRecommender
 )
 from analysis.experiment_aggregator import ExperimentAggregator
+from analysis.experiment_summarizer import ExperimentSummarizer
 from output.report_writer import ReportWriter
 from output.iteration_formatter import IterationStatusFormatter
 from output.failure_formatter import FailureSummaryFormatter
@@ -88,6 +89,9 @@ class BatchExperimentRunner:
         
         # Experiment aggregator (Phase 2C refactoring)
         self._aggregator: Optional[ExperimentAggregator] = None
+        
+        # Experiment summarizer (Phase 2D refactoring)
+        self._summarizer: Optional[ExperimentSummarizer] = None
 
     def parse_arguments(self) -> argparse.Namespace:
         """Parse command line arguments with comprehensive options."""
@@ -220,6 +224,17 @@ Examples:
                 ranking_analysis_callback=ranking_callback
             )
         return self._aggregator
+    
+    def _get_summarizer(self) -> ExperimentSummarizer:
+        """Get or create ExperimentSummarizer instance (lazy initialization)."""
+        if self._summarizer is None:
+            aggregator = self._get_aggregator()
+            self._summarizer = ExperimentSummarizer(
+                aggregator=aggregator,
+                output_generator_callback=self.generate_persistent_summary,
+                log_callback=self.log_timestamp
+            )
+        return self._summarizer
 
     def validate_prerequisites(self, templates_to_use: List[str], problems_to_use: List[str], method_module: Any, args: argparse.Namespace) -> Tuple[bool, List[str]]:
         """Validate all prerequisites before starting experiments."""
@@ -721,90 +736,9 @@ Examples:
 
     def run_summarise_experiments(self, args: argparse.Namespace) -> None:
         """Analyze existing experiments and generate/update summary statistics."""
-        print("\n" + "=" * 80)
-        print("📊  EXPERIMENT SUMMARIZATION MODE  📊")
-        print("=" * 80)
-
-        base_output_dir = Path(args.output_dir)
-        self.log_timestamp(f"🔍 Scanning for existing experiments in {base_output_dir}")
-
-        # Discover existing experiments
-        experiments = self.discover_existing_experiments(base_output_dir)
-
-        if not experiments:
-            print(f"❌ No experiment results found in {base_output_dir}")
-            print("   💡 Run some experiments first with: python run_all_problems.py")
-            return
-
-        print(f"✅ Found {len(experiments)} experiment run(s)")
-
-        if args.verbose:
-            for i, exp in enumerate(experiments[:5], 1):
-                date_str = datetime.fromtimestamp(exp['date']).strftime('%Y-%m-%d %H:%M')
-                print(f"   {i}. {exp['timestamp']} ({date_str})")
-            if len(experiments) > 5:
-                print(f"   ... and {len(experiments) - 5} more")
-
-        self.log_timestamp("📈 Aggregating experiment data...")
-
-        # Aggregate all experiment data
-        aggregated_data = self.aggregate_experiment_data(experiments)
-
-        if not aggregated_data:
-            print("❌ No valid experiment data could be loaded")
-            return
-
-        # Generate summary insights (console output)
-        print(f"\n🏆 " + "=" * 70)
-        print(f"📊 AGGREGATED INSIGHTS FROM ALL EXPERIMENTS")
-        print("=" * 75)
-
-        if aggregated_data.get('analysis', {}).get('template_ranking'):
-            best_template = aggregated_data['analysis']['template_ranking'][0]
-            print(f"🥇 Best Overall Template: {best_template['template']}")
-            print(f"   📊 Average success: {best_template['avg_all_correct_rate']:.1%}")
-            print(f"   🎯 Tested on {best_template['total_problems']} problems")
-
-        if aggregated_data.get('template_stats'):
-            print(f"\n📝 Template Statistics:")
-            template_count = len(aggregated_data['template_stats'])
-            print(f"   🔢 Total templates tested: {template_count}")
-
-            most_tested = max(aggregated_data['template_stats'].items(),
-                            key=lambda x: x[1]['experiments'])
-            print(f"   🧪 Most tested: {most_tested[0][:40]:40s} ({most_tested[1]['experiments']} times)")
-
-        if aggregated_data.get('problem_stats'):
-            print(f"\n🎯 Problem Statistics:")
-            problem_count = len(aggregated_data['problem_stats'])
-            print(f"   🔢 Total problems tested: {problem_count}")
-
-            hardest_problem = min(aggregated_data['problem_stats'].items(),
-                                key=lambda x: x[1]['avg_success_rate'])
-            print(f"   🔴 Hardest problem: {hardest_problem[0]} ({hardest_problem[1]['avg_success_rate']:.1%} avg success)")
-
-        print("=" * 75)
-
-        self.log_timestamp("💾 Generating persistent summary files...")
-
-        # Generate persistent summary files
-        generated_files = self.generate_persistent_summary(base_output_dir, aggregated_data)
-
-        print(f"\n💾 " + "=" * 60)
-        print(f"📁 SUMMARY FILES GENERATED")
-        print("=" * 65)
-        print(f"    📂 Directory: {base_output_dir}")
-        for file_path in generated_files:
-            file_name = Path(file_path).name
-            print(f"    📄 {file_name}")
-        print("=" * 65)
-
-        self.log_timestamp("✅ Experiment summarization completed!")
-        print("\n💡 Use these files to:")
-        print("   📊 Track template performance over time")
-        print("   🎯 Identify problem difficulty patterns")
-        print("   🔍 Find optimal template selections")
-        print("   📈 Monitor experiment trends")
+        # Delegate to ExperimentSummarizer (Phase 2D refactoring)
+        summarizer = self._get_summarizer()
+        summarizer.run(args)
 
     def generate_summary_log(self, output_dir: Path, timestamp: str, total_duration: float, templates_to_use: list, problems_to_use: list, total_combinations: int) -> str:
         """Generate detailed summary log file."""

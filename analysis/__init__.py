@@ -9,6 +9,7 @@ from analysis.statistics_aggregator import (
     BestTemplateRecommender
 )
 from analysis.experiment_aggregator import ExperimentAggregator
+from analysis.experiment_summarizer import ExperimentSummarizer
 
 __all__ = [
     'PerformanceGrader',
@@ -17,5 +18,6 @@ __all__ = [
     'ProblemStatisticsAggregator',
     'ExperimentStatisticsAggregator',
     'BestTemplateRecommender',
-    'ExperimentAggregator'
+    'ExperimentAggregator',
+    'ExperimentSummarizer'
 ]
