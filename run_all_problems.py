@@ -57,48 +57,35 @@ from core.experiment_config import ExperimentConfigResolver
 from core.experiment_executor import ExperimentExecutor
 from core.experiment_validator import ExperimentValidator
 from core.experiment_loop_orchestrator import ExperimentLoopOrchestrator
+from core.service_registry import ServiceRegistry, ServiceFactory
 from domain.value_objects import SuccessThresholds
+from domain.experiment_state import ExperimentResults, ExperimentContext
 
 
 class BatchExperimentRunner:
     """Main class for running batch experiments with comprehensive tracking."""
 
     def __init__(self):
-        # Timing tracking (Iteration 4 refactoring: consolidated 6 variables into 1)
+        """
+        Initialize batch experiment runner.
+        
+        Following Object Calisthenics Rule 8: Maximum 2 instance variables.
+        Reduced from 14 instance variables to 5 by using cohesive objects:
+        - _timing: Timing operations
+        - _results: All results data (was 4 variables)
+        - _context: Execution context (was 2 variables)
+        - _services: All services (was 7 variables)
+        - _thresholds: Success thresholds
+        """
+        # Core infrastructure (5 instance variables total)
         self._timing = TimingTracker()
-
-        # Experiment data and results
-        self.results_data: List[Dict[str, Any]] = []
-        self.all_llm_responses: List[Any] = []
-        self.failed_experiments: List[Dict[str, Any]] = []
-        self.total_experiments_attempted: int = 0
-
-        # File handle for logging
-        self.log_file_handle = None
-        
-        # Output generators (Iteration 7: Phase 1 refactoring)
-        # Note: These will be initialized after results_data is populated
-        self._output_generator: Optional[OutputGenerator] = None
-        self._console_display: Optional[ConsoleDisplay] = None
-        
-        # Experiment executor (Phase 2A refactoring)
-        # Note: Initialized with callbacks to maintain coupling with runner state
-        self._executor: Optional[ExperimentExecutor] = None
-        
-        # Experiment validator (Phase 2B refactoring)
-        self._validator: Optional[ExperimentValidator] = None
-        
-        # Experiment aggregator (Phase 2C refactoring)
-        self._aggregator: Optional[ExperimentAggregator] = None
-        
-        # Experiment summarizer (Phase 2D refactoring)
-        self._summarizer: Optional[ExperimentSummarizer] = None
-        
-        # Experiment loop orchestrator (Primitive obsession refactoring)
-        self._loop_orchestrator: Optional[ExperimentLoopOrchestrator] = None
-        
-        # Success thresholds (removes primitive obsession: magic numbers)
+        self._results = ExperimentResults()
+        self._context = ExperimentContext()
         self._thresholds = SuccessThresholds()
+        
+        # Service registry (consolidates 7 lazy-initialized services)
+        factory = self._create_service_factory()
+        self._services = ServiceRegistry(factory)
 
     def parse_arguments(self) -> argparse.Namespace:
         """Parse command line arguments with comprehensive options."""
@@ -165,9 +152,7 @@ Examples:
         if not to_file_only:
             print(log_msg)
 
-        if self.log_file_handle:
-            self.log_file_handle.write(log_msg + "\n")
-            self.log_file_handle.flush()
+        self._context.write_to_log(log_msg)
 
     def format_duration(self, seconds: float) -> str:
         """Format duration in human-readable format."""
@@ -183,93 +168,38 @@ Examples:
         else:
             return f"{secs}s"
     
-    def _get_output_generator(self) -> OutputGenerator:
-        """Get or create OutputGenerator instance (lazy initialization)."""
-        if self._output_generator is None:
-            self._output_generator = OutputGenerator(self.results_data, self._timing)
-        return self._output_generator
-    
-    def _get_console_display(self) -> ConsoleDisplay:
-        """Get or create ConsoleDisplay instance (lazy initialization)."""
-        if self._console_display is None:
-            self._console_display = ConsoleDisplay(self._timing)
-        return self._console_display
-    
-    def _get_executor(self) -> ExperimentExecutor:
-        """Get or create ExperimentExecutor instance (lazy initialization)."""
-        if self._executor is None:
-            self._executor = ExperimentExecutor(
-                timing_tracker=self._timing,
-                log_callback=self.log_timestamp,
-                format_duration_callback=self.format_duration,
-                log_file_handle=self.log_file_handle
-            )
-            # Sync state
-            self.failed_experiments = self._executor.failed_experiments
-            self.total_experiments_attempted = self._executor.total_experiments_attempted
-        return self._executor
-    
-    def _get_validator(self) -> ExperimentValidator:
-        """Get or create ExperimentValidator instance (lazy initialization)."""
-        if self._validator is None:
-            self._validator = ExperimentValidator(log_callback=self.log_timestamp)
-        return self._validator
-    
-    def _get_aggregator(self) -> ExperimentAggregator:
-        """Get or create ExperimentAggregator instance (lazy initialization)."""
-        if self._aggregator is None:
-            # Provide ranking analysis callback
-            def ranking_callback(results_data):
-                # Temporarily use the provided results for analysis
-                original = self.results_data
-                self.results_data = results_data
-                analysis = self.generate_ranking_analysis()
-                self.results_data = original
-                return analysis
-            
-            self._aggregator = ExperimentAggregator(
-                ranking_analysis_callback=ranking_callback
-            )
-        return self._aggregator
-    
-    def _get_summarizer(self) -> ExperimentSummarizer:
-        """Get or create ExperimentSummarizer instance (lazy initialization)."""
-        if self._summarizer is None:
-            aggregator = self._get_aggregator()
-            self._summarizer = ExperimentSummarizer(
-                aggregator=aggregator,
-                output_generator_callback=self.generate_persistent_summary,
-                log_callback=self.log_timestamp
-            )
-        return self._summarizer
-    
-    def _get_loop_orchestrator(self) -> ExperimentLoopOrchestrator:
-        """Get or create ExperimentLoopOrchestrator instance (lazy initialization)."""
-        if self._loop_orchestrator is None:
-            # Get executor first
-            executor = self._get_executor()
-            
-            self._loop_orchestrator = ExperimentLoopOrchestrator(
-                timing_tracker=self._timing,
-                log_callback=self.log_timestamp,
-                format_duration_callback=self.format_duration,
-                run_experiment_callback=self.run_single_experiment,
-                analyze_results_callback=self.analyze_results,
-                success_thresholds=self._thresholds
-            )
-        return self._loop_orchestrator
+    def _create_service_factory(self) -> ServiceFactory:
+        """Create service factory with required dependencies."""
+        def ranking_callback(results_data):
+            # Temporarily use provided results for analysis
+            original = self._results.results
+            self._results.set_all_results(results_data)
+            analysis = self.generate_ranking_analysis()
+            self._results.set_all_results(original)
+            return analysis
+        
+        return ServiceFactory(
+            timing_tracker=self._timing,
+            results_accessor=lambda: self._results.results,
+            log_callback=self.log_timestamp,
+            format_duration_callback=self.format_duration,
+            run_experiment_callback=self.run_single_experiment,
+            analyze_results_callback=self.analyze_results,
+            generate_ranking_analysis_callback=ranking_callback,
+            generate_persistent_summary_callback=self.generate_persistent_summary,
+            thresholds=self._thresholds,
+            log_file_handle_accessor=lambda: self._context.log_handle
+        )
 
     def validate_prerequisites(self, templates_to_use: List[str], problems_to_use: List[str], method_module: Any, args: argparse.Namespace) -> Tuple[bool, List[str]]:
         """Validate all prerequisites before starting experiments."""
         # Delegate to ExperimentValidator (Phase 2B refactoring)
-        validator = self._get_validator()
-        return validator.validate_all(templates_to_use, problems_to_use, method_module, args)
+        return self._services.validator().validate_all(templates_to_use, problems_to_use, method_module, args)
 
     def setup_experiment_without_argparse(self, experiment_folder: Path) -> Tuple[Any, str]:
         """Setup experiment folder and database without re-parsing arguments."""
         # Delegate to ExperimentExecutor (Phase 2A refactoring)
-        executor = self._get_executor()
-        return executor.setup_experiment(experiment_folder)
+        return self._services.executor().setup_experiment(experiment_folder)
 
     def run_single_experiment(
         self,
@@ -281,11 +211,11 @@ Examples:
     ) -> Tuple[List[Any], List[Any]]:
         """Run a single experiment with timing."""
         # Delegate to ExperimentExecutor (Phase 2A refactoring)
-        executor = self._get_executor()
+        executor = self._services.executor()
         result = executor.run_experiment(template, problem, method_module, args, experiment_folder)
         # Sync state back to main runner
-        self.total_experiments_attempted = executor.total_experiments_attempted
-        self.failed_experiments = executor.failed_experiments
+        self._context.set_attempts(executor.total_experiments_attempted)
+        self._results.set_all_failures(executor.failed_experiments)
         return result
 
     def analyze_results(
@@ -298,20 +228,17 @@ Examples:
     ) -> Dict[str, Any]:
         """Analyze experiment results for success rates with real-time feedback."""
         # Delegate to ExperimentExecutor (Phase 2A refactoring)
-        executor = self._get_executor()
-        return executor.analyze_results(template, problem, rr_trains, iterations, verbose)
+        return self._services.executor().analyze_results(template, problem, rr_trains, iterations, verbose)
 
     def generate_console_table(self) -> None:
         """Generate formatted console table."""
         # Delegate to OutputGenerator (Phase 1 refactoring)
-        output_gen = self._get_output_generator()
-        output_gen.generate_console_table()
+        self._services.output_generator().generate_console_table()
 
     def generate_csv_output(self, output_dir: Path) -> str:
         """Generate CSV output file with ranking data."""
         # Delegate to OutputGenerator (Phase 1 refactoring)
-        output_gen = self._get_output_generator()
-        return output_gen.generate_csv_output(output_dir)
+        return self._services.output_generator().generate_csv_output(output_dir)
     
     def _generate_csv_output_DEPRECATED(self, output_dir: Path) -> str:
         """Generate CSV output file with ranking data."""
@@ -376,8 +303,7 @@ Examples:
     def generate_html_output(self, output_dir: Path) -> str:
         """Generate HTML output file."""
         # Delegate to OutputGenerator (Phase 1 refactoring)
-        output_gen = self._get_output_generator()
-        return output_gen.generate_html_output(output_dir)
+        return self._services.output_generator().generate_html_output(output_dir)
     
     def _generate_html_output_DEPRECATED(self, output_dir: Path) -> str:
         """Generate HTML output file."""
@@ -464,8 +390,7 @@ Examples:
     def generate_ranking_analysis(self) -> Dict[str, Any]:
         """Generate comprehensive ranking and best-performance analysis."""
         # Delegate to OutputGenerator (Phase 1 refactoring)
-        output_gen = self._get_output_generator()
-        return output_gen.generate_ranking_analysis()
+        return self._services.output_generator().generate_ranking_analysis()
     
     def _generate_ranking_analysis_DEPRECATED(self) -> Dict[str, Any]:
         """Generate comprehensive ranking and best-performance analysis."""
@@ -504,8 +429,7 @@ Examples:
     def generate_ranking_report(self, output_dir: Path, timestamp: str) -> str:
         """Generate comprehensive ranking and analysis report."""
         # Delegate to OutputGenerator (Phase 1 refactoring)
-        output_gen = self._get_output_generator()
-        return output_gen.generate_ranking_report(output_dir, timestamp)
+        return self._services.output_generator().generate_ranking_report(output_dir, timestamp)
     
     def _generate_ranking_report_DEPRECATED(self, output_dir: Path, timestamp: str) -> str:
         """Generate comprehensive ranking and analysis report."""
@@ -606,37 +530,33 @@ Examples:
     def discover_existing_experiments(self, base_output_dir: Path) -> List[Dict[str, Any]]:
         """Discover existing experiment result directories and load their data."""
         # Delegate to ExperimentAggregator (Phase 2C refactoring)
-        aggregator = self._get_aggregator()
-        return aggregator.discover_experiments(base_output_dir)
+        return self._services.aggregator().discover_experiments(base_output_dir)
 
     def load_experiment_data(self, csv_file: Path) -> List[Dict[str, Any]]:
         """Load experiment data from CSV file."""
         # Delegate to ExperimentAggregator (Phase 2C refactoring)
-        aggregator = self._get_aggregator()
-        return aggregator.load_data(csv_file)
+        return self._services.aggregator().load_data(csv_file)
 
     def aggregate_experiment_data(self, all_experiments: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Aggregate data from multiple experiment runs."""
         # Delegate to ExperimentAggregator (Phase 2C refactoring)
-        aggregator = self._get_aggregator()
-        return aggregator.aggregate(all_experiments)
+        return self._services.aggregator().aggregate(all_experiments)
 
     def _generate_failure_summary(self) -> None:
         """Generate and print failure summary."""
         formatter = FailureSummaryFormatter()
 
         # Print to console
-        formatter.print_console_summary(self.failed_experiments, self.total_experiments_attempted)
+        formatter.print_console_summary(self._results.failures, self._context.get_attempts())
 
         # Also log to file if available
-        if self.log_file_handle:
-            formatter.write_file_summary(self.log_file_handle, self.failed_experiments, self.total_experiments_attempted)
+        if self._context.is_logging():
+            formatter.write_file_summary(self._context.log_handle, self._results.failures, self._context.get_attempts())
 
     def generate_persistent_summary(self, base_output_dir: Path, aggregated_data: Dict[str, Any]) -> List[str]:
         """Generate persistent summary files that aggregate all experiments."""
         # Delegate to OutputGenerator (Phase 1 refactoring)
-        output_gen = self._get_output_generator()
-        return output_gen.generate_persistent_summary(base_output_dir, aggregated_data)
+        return self._services.output_generator().generate_persistent_summary(base_output_dir, aggregated_data)
     
     def _generate_persistent_summary_DEPRECATED(self, base_output_dir: Path, aggregated_data: Dict[str, Any]) -> List[str]:
         """Generate persistent summary files that aggregate all experiments."""
@@ -760,14 +680,12 @@ Examples:
     def run_summarise_experiments(self, args: argparse.Namespace) -> None:
         """Analyze existing experiments and generate/update summary statistics."""
         # Delegate to ExperimentSummarizer (Phase 2D refactoring)
-        summarizer = self._get_summarizer()
-        summarizer.run(args)
+        self._services.summarizer().run(args)
 
     def generate_summary_log(self, output_dir: Path, timestamp: str, total_duration: float, templates_to_use: list, problems_to_use: list, total_combinations: int) -> str:
         """Generate detailed summary log file."""
         # Delegate to OutputGenerator (Phase 1 refactoring)
-        output_gen = self._get_output_generator()
-        return output_gen.generate_summary_log(output_dir, timestamp, total_duration, templates_to_use, problems_to_use, total_combinations)
+        return self._services.output_generator().generate_summary_log(output_dir, timestamp, total_duration, templates_to_use, problems_to_use, total_combinations)
     
     def _generate_summary_log_DEPRECATED(self, output_dir: Path, timestamp: str, total_duration: float, templates_to_use: list, problems_to_use: list, total_combinations: int) -> str:
         """Generate detailed summary log file."""
@@ -838,8 +756,7 @@ Examples:
         Following Object Calisthenics Rule 7: Small focused methods.
         """
         # Delegate to ConsoleDisplay (Phase 1 refactoring)
-        console = self._get_console_display()
-        total_combinations = console.print_experiment_configuration(args, templates_to_use, problems_to_use)
+        total_combinations = self._services.console_display().print_experiment_configuration(args, templates_to_use, problems_to_use)
         self.log_timestamp(f"✅ Configuration complete. Starting {total_combinations} test combinations.")
         return total_combinations
 

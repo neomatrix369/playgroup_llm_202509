@@ -11,6 +11,10 @@ from domain.stats_models import (
     ProblemStats,
     ExperimentStats
 )
+from domain.experiment_state import (
+    ExperimentResults,
+    ExperimentContext
+)
 
 __all__ = [
     'SuccessThresholds',
@@ -19,5 +23,7 @@ __all__ = [
     'ExperimentResult',
     'TemplateStats',
     'ProblemStats',
-    'ExperimentStats'
+    'ExperimentStats',
+    'ExperimentResults',
+    'ExperimentContext'
 ]
