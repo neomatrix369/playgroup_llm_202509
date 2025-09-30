@@ -130,83 +130,8 @@ Examples:
 
         return parser.parse_args()
 
-    def discover_templates(self) -> List[str]:
-        """Discover available J2 template files."""
-        prompts_dir = Path("prompts")
-        if not prompts_dir.exists():
-            raise FileNotFoundError("prompts directory not found")
-
-        templates = []
-        for j2_file in prompts_dir.glob("*.j2"):
-            # Skip templates with 'spelke' in name as per original script
-            if 'spelke' not in j2_file.name.lower():
-                templates.append(j2_file.name)
-
-        # Sort to ensure consistent ordering
-        return sorted(templates)
-
-    def get_default_problems(self) -> List[str]:
-        """Get default problem IDs from run_all_problems.py."""
-        return [
-            "0d3d703e",  # fixed colour mapping, 3x3 grid min
-            "08ed6ac7",  # coloured in order of height, 9x9 grid min
-            "178fcbfb",  # dots form coloured lines, 9x9 grid min
-            "9565186b",  # most frequent colour wins, 3x3 grid min
-            "0a938d79",  # dots form repeated coloured lines, 9x22 grid min
-        ]
-
-    def resolve_templates(self, selection: Optional[str]) -> List[str]:
-        """Resolve template selection from string or indices."""
-        available_templates = self.discover_templates()
-
-        if not selection:
-            return available_templates
-
-        selected = []
-        for item in selection.split(","):
-            item = item.strip()
-            if item.isdigit():
-                # Index selection
-                idx = int(item)
-                if 0 <= idx < len(available_templates):
-                    selected.append(available_templates[idx])
-                else:
-                    print(f"Warning: Template index {idx} out of range")
-            else:
-                # Name selection
-                if item in available_templates:
-                    selected.append(item)
-                else:
-                    print(f"Warning: Template '{item}' not found")
-
-        return selected
-
-    def resolve_problems(self, selection: Optional[str]) -> List[str]:
-        """Resolve problem selection from string or indices."""
-        default_problems = self.get_default_problems()
-
-        if not selection:
-            return default_problems
-
-        selected = []
-        for item in selection.split(","):
-            item = item.strip()
-            if item.isdigit():
-                # Check if it's an index or a problem ID
-                if len(item) <= 2:  # Assume index if short number
-                    idx = int(item)
-                    if 0 <= idx < len(default_problems):
-                        selected.append(default_problems[idx])
-                    else:
-                        print(f"Warning: Problem index {idx} out of range")
-                else:
-                    # Treat as problem ID
-                    selected.append(item)
-            else:
-                # Direct problem ID
-                selected.append(item)
-
-        return selected
+    # Configuration resolution methods moved to ExperimentConfigResolver
+    # (Duplication removed in Phase 2 refactoring)
 
     def log_timestamp(self, message: str, to_file_only: bool = False) -> None:
         """Log message with timestamp."""
@@ -254,7 +179,7 @@ Examples:
 
         # 1. Validate templates exist
         print("  ✓ Checking templates...")
-        available_templates = self.discover_templates()
+        available_templates = ExperimentConfigResolver.discover_templates()
         for template in templates_to_use:
             if template not in available_templates:
                 errors.append(f"Template not found: {template}")
@@ -1317,8 +1242,8 @@ Examples:
 
         # Resolve selections
         self.log_timestamp("🔍 Resolving template and problem selections...")
-        templates_to_use = self.resolve_templates(args.templates)
-        problems_to_use = self.resolve_problems(args.problems)
+        templates_to_use = ExperimentConfigResolver.resolve_templates(args.templates)
+        problems_to_use = ExperimentConfigResolver.resolve_problems(args.problems)
 
         # Display configuration (extracted method)
         total_combinations = self._print_experiment_configuration(args, templates_to_use, problems_to_use)
