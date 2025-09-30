@@ -60,6 +60,7 @@ from core.experiment_loop_orchestrator import ExperimentLoopOrchestrator
 from core.service_registry import ServiceRegistry, ServiceFactory
 from core.experiment_coordinator import ExperimentCoordinator
 from core.checkpoint_manager import CheckpointManager, ExperimentCheckpoint
+from core.experiment_argument_parser import ExperimentArgumentParser
 from domain.value_objects import SuccessThresholds
 from domain.experiment_state import ExperimentResults, ExperimentContext
 
@@ -98,65 +99,7 @@ class BatchExperimentRunner:
 
     def parse_arguments(self) -> argparse.Namespace:
         """Parse command line arguments with comprehensive options."""
-        parser = argparse.ArgumentParser(
-            description="Comprehensive batch experiment runner for ARC-AGI testing",
-            formatter_class=argparse.RawDescriptionHelpFormatter,
-            epilog="""
-Examples:
-  # Run all templates and problems
-  python run_all_problems.py
-
-  # Run specific templates and problems with 5 iterations
-  python run_all_problems.py -t "baseline_justjson_enhanced.j2,reflexion_enhanced.j2" -p "0d3d703e,08ed6ac7" -i 5
-
-  # Dry run with verbose output
-  python run_all_problems.py --dry-run --verbose
-
-  # Use different method module
-  python run_all_problems.py --method method2_reflexion --model openrouter/deepseek/deepseek-chat-v3-0324
-
-  # Analyze existing experiments and generate summary statistics
-  python run_all_problems.py --summarise-experiments --verbose
-
-  # Summarize experiments from custom output directory
-  python run_all_problems.py --summarise-experiments -o my_custom_results
-            """)
-
-        # Core experiment parameters
-        parser.add_argument("-m", "--method", type=str, default="method1_text_prompt",
-                          help="Method module to use (default: %(default)s)")
-        parser.add_argument("--model", type=str, default="openrouter/deepseek/deepseek-chat-v3-0324",
-                          help="Model name to use (default: %(default)s)")
-        parser.add_argument("-i", "--iterations", type=int, default=1,
-                          help="Number of iterations per test (default: %(default)s)")
-
-        # Template and problem selection
-        parser.add_argument("-t", "--templates", type=str, default="baseline_justjson_enhanced.j2,baseline_wquotedgridcsv_excel_enhanced.j2,baseline_wplaingrid_enhanced.j2,reflexion_enhanced.j2",
-                          help="Comma-separated list of template names or indices")
-        parser.add_argument("-p", "--problems", type=str,
-                          help="Comma-separated list of problem IDs or indices")
-
-        # Output and behavior
-        parser.add_argument("-o", "--output-dir", type=str, default="batch_results",
-                          help="Output directory (default: %(default)s)")
-        parser.add_argument("--dry-run", action="store_true",
-                          help="Show what would be run without executing")
-        parser.add_argument("-v", "--verbose", action="store_true",
-                          help="Verbose output")
-        parser.add_argument("--summarise-experiments", action="store_true",
-                          help="Analyze existing experiment results and generate/update summary statistics")
-        parser.add_argument("--fail-fast", action="store_true",
-                          help="Stop execution on first error (default: continue through all experiments)")
-        
-        # Checkpoint and resume
-        parser.add_argument("--no-checkpoint", action="store_true",
-                          help="Disable automatic checkpoint saving (checkpoints enabled by default)")
-        parser.add_argument("--resume", action="store_true",
-                          help="Force resume from last checkpoint (auto-prompts by default)")
-        parser.add_argument("--no-resume", action="store_true",
-                          help="Start fresh, ignoring any existing checkpoints")
-
-        return parser.parse_args()
+        return ExperimentArgumentParser.parse()
 
     # Configuration resolution methods moved to ExperimentConfigResolver
     # (Duplication removed in Phase 2 refactoring)
@@ -356,13 +299,14 @@ Examples:
             # Setup log file (append mode if resuming, write mode if new)
             log_file = output_dir / f"experiment_run_{timestamp}.log"
             mode = 'a' if checkpoint_exists and not args.no_resume else 'w'
-            self.log_file_handle = open(log_file, mode)
-            
+            log_handle = open(log_file, mode)
+            self._context.set_log_handle(log_handle)
+
             if mode == 'a':
-                self.log_file_handle.write(f"\n\n{'='*80}\n")
-                self.log_file_handle.write(f"RESUMED: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                self.log_file_handle.write(f"{'='*80}\n\n")
-            
+                log_handle.write(f"\n\n{'='*80}\n")
+                log_handle.write(f"RESUMED: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                log_handle.write(f"{'='*80}\n\n")
+
             self.log_timestamp(f"Logging to: {log_file}")
             print(f"📝 Detailed log: {log_file.name}")
 
@@ -384,8 +328,8 @@ Examples:
             return method_module
         except ImportError as e:
             print(f"Error importing method module '{args.method}': {e}")
-            if self.log_file_handle:
-                self.log_file_handle.close()
+            if self._context.is_logging():
+                self._context.close_log()
             return None
 
     def _run_preflight_validation(
@@ -410,11 +354,11 @@ Examples:
 
         if not validation_passed:
             print(f"\n❌ Cannot proceed with experiments due to validation failures")
-            if self.log_file_handle:
-                self.log_file_handle.write("\nValidation failed:\n")
+            if self._context.is_logging():
+                self._context.log_handle.write("\nValidation failed:\n")
                 for error in validation_errors:
-                    self.log_file_handle.write(f"  - {error}\n")
-                self.log_file_handle.close()
+                    self._context.log_handle.write(f"  - {error}\n")
+                self._context.close_log()
             return False
 
         print(f"{'='*80}\n")
@@ -431,7 +375,7 @@ Examples:
             formatted_duration: Formatted duration string
         """
         # Delegate to ConsoleDisplay (Phase 1 refactoring)
-        console = self._get_console_display()
+        console = self._services.console_display()
         console.print_template_performance_summary(template, template_results, formatted_duration)
 
     def _print_key_insights(self, analysis: Dict[str, Any]) -> None:
@@ -441,7 +385,7 @@ Examples:
             analysis: Analysis dictionary from generate_ranking_analysis()
         """
         # Delegate to ConsoleDisplay (Phase 1 refactoring)
-        console = self._get_console_display()
+        console = self._services.console_display()
         console.print_key_insights(analysis)
 
     def _generate_and_save_outputs(
@@ -492,10 +436,10 @@ Examples:
             problems_to_use: List of problems used
         """
         # Delegate to ConsoleDisplay (Phase 1 refactoring)
-        console = self._get_console_display()
+        console = self._services.console_display()
         console.print_final_summary(
             total_duration, total_combinations, templates_to_use, problems_to_use,
-            self.results_data, self.all_llm_responses
+            self._results.results, self._results.llm_responses
         )
         self.log_timestamp("🎉 EXPERIMENT COMPLETED! 🎉")
 
@@ -555,9 +499,9 @@ Examples:
         )
         
         # Collect results from orchestrator
-        self.results_data = loop_result['results_data']
-        self.all_llm_responses = loop_result['all_llm_responses']
-        self.failed_experiments = loop_result['failed_experiments']
+        self._results.set_all_results(loop_result['results_data'])
+        self._results.set_all_llm_responses(loop_result['all_llm_responses'])
+        self._results.set_all_failures(loop_result['failed_experiments'])
         
         # If loop stopped early due to fail-fast, handle it
         if not loop_result['completed']:
@@ -567,7 +511,7 @@ Examples:
         # Print template performance summaries
         if not args.dry_run:
             for template in templates_to_use:
-                template_results = [r for r in self.results_data if r['template'] == template]
+                template_results = [r for r in self._results.results if r['template'] == template]
                 if template_results:
                     template_duration = self._timing.get_template_duration(template)
                     formatted_duration = self.format_duration(template_duration)
@@ -580,7 +524,7 @@ Examples:
         self.log_timestamp("🎉 All tests completed. Generating results...")
 
         # Generate outputs
-        if not args.dry_run and self.results_data:
+        if not args.dry_run and self._results.results:
             self.generate_console_table()
 
             # Generate ranking analysis and show key insights
@@ -594,16 +538,15 @@ Examples:
         self._print_final_summary(total_duration, total_combinations, templates_to_use, problems_to_use)
 
         # Generate failure summary if there were any failures
-        if self.failed_experiments:
+        if self._results.failures:
             self._generate_failure_summary()
 
         # Close log file
-        if self.log_file_handle:
-            self.log_file_handle.write(f"\n{'='*80}\n")
-            self.log_file_handle.write("EXPERIMENT COMPLETED\n")
-            self.log_file_handle.write(f"{'='*80}\n")
-            self.log_file_handle.close()
-            self.log_file_handle = None
+        if self._context.is_logging():
+            self._context.log_handle.write(f"\n{'='*80}\n")
+            self._context.log_handle.write("EXPERIMENT COMPLETED\n")
+            self._context.log_handle.write(f"{'='*80}\n")
+            self._context.close_log()
 
 
 def main():
@@ -618,21 +561,21 @@ def main():
             runner.run_batch_experiments(args)
     except KeyboardInterrupt:
         print("\n\n⚠️  Experiment interrupted by user")
-        if runner.failed_experiments:
+        if runner._results.failures:
             runner._generate_failure_summary()
-        if runner.log_file_handle:
-            runner.log_file_handle.write("\n\nEXPERIMENT INTERRUPTED BY USER\n")
-            runner.log_file_handle.close()
+        if runner._context.is_logging():
+            runner._context.log_handle.write("\n\nEXPERIMENT INTERRUPTED BY USER\n")
+            runner._context.close_log()
     except Exception as e:
         print(f"\n❌ Experiment failed with error: {str(e)}")
         if args.verbose:
             traceback.print_exc()
-        if runner.failed_experiments:
+        if runner._results.failures:
             runner._generate_failure_summary()
-        if runner.log_file_handle:
-            runner.log_file_handle.write(f"\n\nEXPERIMENT FAILED: {str(e)}\n")
-            runner.log_file_handle.write(traceback.format_exc())
-            runner.log_file_handle.close()
+        if runner._context.is_logging():
+            runner._context.log_handle.write(f"\n\nEXPERIMENT FAILED: {str(e)}\n")
+            runner._context.log_handle.write(traceback.format_exc())
+            runner._context.close_log()
 
 
 if __name__ == "__main__":
