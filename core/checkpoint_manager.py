@@ -229,11 +229,47 @@ class CheckpointManager:
         print(f"   Output directory: {checkpoint.output_dir}")
         print(f"   {checkpoint.get_progress_summary()}")
         
+        # Show completed experiments
+        completed_count = len(checkpoint.completed_experiments)
+        if completed_count > 0:
+            print(f"\n✅ COMPLETED EXPERIMENTS ({completed_count}):")
+            for i, (template, problem) in enumerate(checkpoint.completed_experiments, 1):
+                # Get result if available
+                result = next((r for r in checkpoint.results_data if r['template'] == template and r['problem'] == problem), None)
+                if result:
+                    success_rate = result.get('all_correct_rate', 0) * 100
+                    duration = result.get('individual_duration', 0)
+                    hours = int(duration // 3600)
+                    mins = int((duration % 3600) // 60)
+                    print(f"   {i}. {template} + {problem}")
+                    print(f"      Success: {success_rate:.1f}%, Duration: {hours}h {mins}m")
+                else:
+                    print(f"   {i}. {template} + {problem}")
+        
+        # Show what will run next
         next_exp = checkpoint.get_next_experiment()
+        remaining_count = checkpoint.total_combinations - completed_count
+        
+        print(f"\n⏳ REMAINING EXPERIMENTS ({remaining_count}):")
         if next_exp:
             template, problem, test_num = next_exp
-            print(f"\n▶️  Would resume from:")
-            print(f"   Test {test_num}/{checkpoint.total_combinations}: {template} + {problem}")
+            print(f"   ▶️  NEXT: Test {test_num}/{checkpoint.total_combinations}: {template} + {problem}")
+            
+            # List remaining experiments
+            all_remaining = []
+            for t in checkpoint.templates:
+                for p in checkpoint.problems:
+                    if (t, p) not in checkpoint.completed_experiments:
+                        all_remaining.append((t, p))
+            
+            # Show first few and total
+            for i, (t, p) in enumerate(all_remaining[:5], start=test_num):
+                if i == test_num:
+                    continue  # Skip the next one we already showed
+                print(f"   {i}. {t} + {p}")
+            
+            if len(all_remaining) > 5:
+                print(f"   ... and {len(all_remaining) - 5} more")
         
         print("\n" + "=" * 80)
         response = input("Resume from checkpoint? [Y/n]: ").strip().lower()

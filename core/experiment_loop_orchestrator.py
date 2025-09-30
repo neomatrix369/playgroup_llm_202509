@@ -423,8 +423,10 @@ class ExperimentLoopOrchestrator:
         self.checkpoint_manager.save_checkpoint(checkpoint)
     
     def _restore_from_checkpoint(self, checkpoint: ExperimentCheckpoint, progress: ProgressTracker) -> None:
-        """Restore state from checkpoint."""
-        self.log_timestamp("🔄 Resuming from checkpoint...")
+        """Restore state from checkpoint with detailed logging."""
+        self.log_timestamp("=" * 70)
+        self.log_timestamp("🔄 RESUMING FROM CHECKPOINT")
+        self.log_timestamp("=" * 70)
         
         # Restore completed experiments
         self.completed_experiments = set(checkpoint.completed_experiments)
@@ -439,12 +441,44 @@ class ExperimentLoopOrchestrator:
         # Restore timing
         self.start_time = checkpoint.start_time
         
-        # Log resume info
+        # Log detailed restore info
+        completed_count = len(checkpoint.completed_experiments)
+        remaining_count = checkpoint.total_combinations - completed_count
+        percentage = (completed_count / checkpoint.total_combinations * 100) if checkpoint.total_combinations > 0 else 0
+        
+        self.log_timestamp(f"📊 Progress: {completed_count}/{checkpoint.total_combinations} ({percentage:.1f}%)")
+        
+        # Log completed experiments
+        if completed_count > 0:
+            self.log_timestamp(f"\n✅ COMPLETED EXPERIMENTS ({completed_count}):")
+            for i, (template, problem) in enumerate(checkpoint.completed_experiments, 1):
+                result = next((r for r in checkpoint.results_data if r['template'] == template and r['problem'] == problem), None)
+                if result:
+                    success_rate = result.get('all_correct_rate', 0) * 100
+                    self.log_timestamp(f"   {i}. {template} + {problem} (Success: {success_rate:.1f}%)")
+                else:
+                    self.log_timestamp(f"   {i}. {template} + {problem}")
+        
+        # Log what will run
         next_exp = checkpoint.get_next_experiment()
         if next_exp:
             template, problem, test_num = next_exp
-            self.log_timestamp(
-                f"📍 Resuming from test {test_num}/{checkpoint.total_combinations}: {template} + {problem}"
-            )
+            self.log_timestamp(f"\n⏳ REMAINING EXPERIMENTS ({remaining_count}):")
+            self.log_timestamp(f"   ▶️  NEXT: Test {test_num}/{checkpoint.total_combinations}: {template} + {problem}")
+            
+            # List all remaining
+            all_remaining = []
+            for t in checkpoint.templates:
+                for p in checkpoint.problems:
+                    if (t, p) not in checkpoint.completed_experiments:
+                        all_remaining.append((t, p))
+            
+            for i, (t, p) in enumerate(all_remaining[1:6], start=test_num + 1):  # Show next 5 after the current
+                self.log_timestamp(f"   {i}. {t} + {p}")
+            
+            if len(all_remaining) > 6:
+                self.log_timestamp(f"   ... and {len(all_remaining) - 6} more")
         
-        self.log_timestamp(f"✅ Restored {len(checkpoint.completed_experiments)} completed experiments")
+        self.log_timestamp("=" * 70)
+        self.log_timestamp("✅ Checkpoint restored successfully - continuing experiments...")
+        self.log_timestamp("=" * 70 + "\n")
