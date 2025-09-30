@@ -71,6 +71,22 @@ def make_grid_csv(input):
 #  - 3
 
 
+def get_grid_size(grid):
+    """Return e.g. (3,3) for grid size"""
+    assert isinstance(grid, list)
+    grid = np.array(grid)
+    return grid.shape
+
+
+def write_grid(input):
+    """Write out a 2D grid according to some rules..."""
+    # print(type(input))
+    # print(f"input: {input}")
+    # return make_grid_csv_english_words(input)
+    return make_grid_plain(input)
+    # return make_grid_csv_quoted(input)
+
+
 if __name__ == "__main__":
     # TODO
     # make a grid here
