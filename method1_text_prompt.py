@@ -71,12 +71,16 @@ def run_experiment(
 
         # If structural error and retries remaining, try again with same prompt
         if should_regen and retry_attempt < MAX_RETRY_ATTEMPTS - 1:
-            logger.info(f"Retrying with same prompt (attempt {retry_attempt + 2}/{MAX_RETRY_ATTEMPTS})...")
+            retry_msg = f"🔄 Retrying with same prompt (attempt {retry_attempt + 2}/{MAX_RETRY_ATTEMPTS})..."
+            logger.info(retry_msg)
+            print(retry_msg)  # Also print to console for visibility
             continue
 
         # Either success, non-structural error, or out of retries - break and record
         if should_regen and retry_attempt == MAX_RETRY_ATTEMPTS - 1:
-            logger.error(f"Failed after {MAX_RETRY_ATTEMPTS} attempts, giving up on this iteration")
+            failure_msg = f"❌ Failed after {MAX_RETRY_ATTEMPTS} attempts, giving up on this iteration"
+            logger.error(failure_msg)
+            print(failure_msg)  # Also print to console for visibility
         break
 
     explanation = extract_explanation(content)
