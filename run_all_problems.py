@@ -54,6 +54,7 @@ from output.console_display import ConsoleDisplay
 from core.timing_tracker import TimingTracker
 from core.experiment_config import ExperimentConfigResolver
 from core.experiment_executor import ExperimentExecutor
+from core.experiment_validator import ExperimentValidator
 
 
 class BatchExperimentRunner:
@@ -80,6 +81,9 @@ class BatchExperimentRunner:
         # Experiment executor (Phase 2A refactoring)
         # Note: Initialized with callbacks to maintain coupling with runner state
         self._executor: Optional[ExperimentExecutor] = None
+        
+        # Experiment validator (Phase 2B refactoring)
+        self._validator: Optional[ExperimentValidator] = None
 
     def parse_arguments(self) -> argparse.Namespace:
         """Parse command line arguments with comprehensive options."""
@@ -189,55 +193,18 @@ Examples:
             self.failed_experiments = self._executor.failed_experiments
             self.total_experiments_attempted = self._executor.total_experiments_attempted
         return self._executor
+    
+    def _get_validator(self) -> ExperimentValidator:
+        """Get or create ExperimentValidator instance (lazy initialization)."""
+        if self._validator is None:
+            self._validator = ExperimentValidator(log_callback=self.log_timestamp)
+        return self._validator
 
     def validate_prerequisites(self, templates_to_use: List[str], problems_to_use: List[str], method_module: Any, args: argparse.Namespace) -> Tuple[bool, List[str]]:
         """Validate all prerequisites before starting experiments."""
-        errors = []
-
-        self.log_timestamp("🔍 Running pre-flight validation...")
-
-        # 1. Validate templates exist
-        print("  ✓ Checking templates...")
-        available_templates = ExperimentConfigResolver.discover_templates()
-        for template in templates_to_use:
-            if template not in available_templates:
-                errors.append(f"Template not found: {template}")
-            else:
-                print(f"    ✓ {template}")
-
-        # 2. Validate at least one problem can be loaded
-        print("  ✓ Checking problem data access...")
-        if problems_to_use:
-            try:
-                test_problem = utils.get_examples(problems_to_use[0])
-                if not test_problem:
-                    errors.append(f"Problem {problems_to_use[0]} loaded but returned empty data")
-                else:
-                    print(f"    ✓ Successfully loaded problem: {problems_to_use[0]}")
-                    print(f"      - Train examples: {len(test_problem.get('train', []))}")
-                    print(f"      - Test examples: {len(test_problem.get('test', []))}")
-            except Exception as e:
-                errors.append(f"Failed to load problem {problems_to_use[0]}: {str(e)}")
-
-        # 3. Validate method module has required function
-        print("  ✓ Checking method module...")
-        if not hasattr(method_module, 'run_experiment_for_iterations'):
-            errors.append("Method module missing 'run_experiment_for_iterations' function")
-        else:
-            print(f"    ✓ Method module loaded: {method_module.__file__}")
-
-        # Note: Database and API validation will happen during first experiment setup
-        # We skip them here to avoid argument parsing conflicts with do_first_setup()
-        print("  ✓ Database and API validation will occur during experiment setup")
-
-        if errors:
-            print("\n❌ PRE-FLIGHT VALIDATION FAILED:")
-            for error in errors:
-                print(f"   ✗ {error}")
-            return False, errors
-        else:
-            print("\n✅ All pre-flight checks passed!")
-            return True, []
+        # Delegate to ExperimentValidator (Phase 2B refactoring)
+        validator = self._get_validator()
+        return validator.validate_all(templates_to_use, problems_to_use, method_module, args)
 
     def setup_experiment_without_argparse(self, experiment_folder: Path) -> Tuple[Any, str]:
         """Setup experiment folder and database without re-parsing arguments."""

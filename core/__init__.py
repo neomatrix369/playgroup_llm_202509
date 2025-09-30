@@ -3,9 +3,11 @@
 from core.timing_tracker import TimingTracker
 from core.experiment_config import ExperimentConfigResolver
 from core.experiment_executor import ExperimentExecutor
+from core.experiment_validator import ExperimentValidator
 
 __all__ = [
     'TimingTracker',
     'ExperimentConfigResolver',
-    'ExperimentExecutor'
+    'ExperimentExecutor',
+    'ExperimentValidator'
 ]
