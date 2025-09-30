@@ -69,16 +69,19 @@ Note if it got an explanation right, but wrote bad code (e.g. with a SyntaxError
 # - ExecutionOutcomes: list of ExecutionOutcome objects, one per train example
 # - exception_message: error details if execution failed, None otherwise
 #
-# The should_request_regeneration() function analyzes exceptions to recommend:
-# - STRUCTURAL errors (missing transform, wrong signature, data instead of code): regenerate code
-# - LOGIC errors (AssertionError, IndexError): debug instead of regenerate
-# - SYNTAX errors: regenerate if severe, debug if minor
+# Automatic Code Regeneration with Retry Logic:
+# The should_request_regeneration() function analyzes exceptions to categorize errors:
+# - STRUCTURAL errors (missing transform, wrong signature, data instead of code): AUTO-RETRY
+# - LOGIC errors (AssertionError, IndexError, ZeroDivisionError): NO RETRY (needs debugging)
+# - SYNTAX errors: AUTO-RETRY if severe (code too short), otherwise debugging preferred
 #
-# NOTE: Currently the regeneration recommendation is LOGGED but not ACTED upon.
-# To fully implement automatic regeneration, the experiment loop would need to:
-# 1. Check if should_regen is True
-# 2. Request new code from LLM with error feedback
-# 3. Implement retry logic with maximum attempt limit
+# When structural errors occur, the system automatically retries up to 3 times:
+# 1. Attempt 1: Initial LLM call returns bad code → structural error detected
+# 2. Attempt 2: Retry same prompt → system logs "Retrying (attempt 2/3)..."
+# 3. Attempt 3: Final retry → if still fails, logs "Failed after 3 attempts, giving up"
+# 4. System continues to next iteration (does not block entire experiment)
+#
+# This prevents wasted iterations on structural failures like LLM returning data instead of code.
 ```
 
 ## Batch Experiment Runner
@@ -135,9 +138,11 @@ Results are saved in timestamped directories under `batch_results/` containing:
   - ExperimentArgumentParser, ExperimentExecutor, ExperimentAggregator, ExperimentSummarizer
   - ExperimentCoordinator, TimingTracker, ExperimentResults, ExperimentContext
   - 64.7% code reduction in main orchestrator (1,647 → 582 lines)
-- **Code Generation Validation**: Intelligent LLM output validation and regeneration recommendations
+- **Automatic Code Regeneration**: Intelligent LLM output validation with automatic retry (up to 3 attempts)
   - Detects when LLM returns data instead of code
-  - Categorizes errors: STRUCTURAL (regenerate), LOGIC (debug), SYNTAX (context-dependent)
+  - Categorizes errors: STRUCTURAL (auto-retry), LOGIC (debug), SYNTAX (context-dependent)
+  - Retries same prompt automatically for structural failures
+  - Prevents wasted experiment iterations on malformed code
   - Sanitizes Unicode artifacts (arrows →, smart quotes "", etc.)
 - **Type Safety**: Enforces np.ndarray return type from transform functions (rejects lists/primitives)
 
@@ -153,7 +158,13 @@ Results are saved in timestamped directories under `batch_results/` containing:
 - **Improved execution resilience**: Fallback to serial execution when parallel processing fails
 - **Multi-strategy code extraction**: 3-tier fallback for extracting code from LLM responses
 - **Better dependency management**: Added missing scikit-image dependency
-- **Enhanced logging**: Proper logger initialization across modules 
+- **Enhanced logging**: Proper logger initialization across modules
+
+#### Testing
+- **Core functionality tests**: `test_run_code.py` - Code execution, validation, sanitization
+- **Retry logic tests**: `test_retry_logic.py` - Automatic regeneration on structural errors
+- **Run tests**: `pytest` or `pytest test_retry_logic.py -v` for specific test files
+- **Coverage report**: `python -m pytest --cov=. --cov-report=html` (view with `open htmlcov/index.html`) 
 
 Now compare this to the EXPT (experiments) results - Ian on screen - better prompt sort of gets us further.
 
