@@ -50,6 +50,7 @@ from output.report_writer import ReportWriter
 from output.iteration_formatter import IterationStatusFormatter
 from output.failure_formatter import FailureSummaryFormatter
 from core.timing_tracker import TimingTracker
+from core.experiment_config import ExperimentConfigResolver
 
 
 class BatchExperimentRunner:
