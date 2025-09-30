@@ -1,6 +1,6 @@
 import unittest
 
-from utils import extract_explanation
+from utils import extract_explanation, extract_from_code_block
 
 # NOTE to Ian - entirely written by Cursor
 
@@ -56,6 +56,54 @@ class TestExtractExplanation(unittest.TestCase):
         text = "Text <EXPLANATION>Explanation with <brackets> and other content</EXPLANATION> more"
         result = extract_explanation(text)
         self.assertEqual(result, "Explanation with <brackets> and other content")
+
+
+class TestExtractFromCodeBlock(unittest.TestCase):
+    def test_extract_standard_python_block(self):
+        """Test extracting code from standard ```python``` block"""
+        text = "Here is some code:\n```python\ndef transform(x):\n    return x\n```\nMore text"
+        result = extract_from_code_block(text)
+        self.assertEqual(result, "def transform(x):\n    return x")
+
+    def test_extract_no_language_specified(self):
+        """Test extracting code from ``` block without language"""
+        text = "Code:\n```\ndef transform(x):\n    return x\n```"
+        result = extract_from_code_block(text)
+        self.assertEqual(result, "def transform(x):\n    return x")
+
+    def test_extract_with_no_whitespace(self):
+        """Test extracting code that starts immediately after backticks"""
+        text = "```python\ndef transform(x):\n    return x```"
+        result = extract_from_code_block(text)
+        self.assertIsNotNone(result)
+        self.assertIn("def transform", result)
+
+    def test_extract_plain_def_transform(self):
+        """Test extracting code that's not in markdown blocks but starts with def transform"""
+        text = "Here's the solution:\ndef transform(grid):\n    return grid[::-1]\n\nThat should work!"
+        result = extract_from_code_block(text)
+        self.assertIsNotNone(result)
+        self.assertIn("def transform(grid)", result)
+
+    def test_extract_no_code_found(self):
+        """Test when no code block is present"""
+        text = "This is just plain text with no code blocks"
+        result = extract_from_code_block(text)
+        self.assertIsNone(result)
+
+    def test_extract_empty_code_block(self):
+        """Test when code block is empty"""
+        text = "Code:\n```python\n```"
+        result = extract_from_code_block(text)
+        # Should return None for empty blocks (after strip)
+        self.assertIsNone(result)
+
+    def test_extract_multiple_blocks(self):
+        """Test extracting first code block when multiple are present"""
+        text = "```python\ndef first():\n    pass\n```\nText\n```python\ndef second():\n    pass\n```"
+        result = extract_from_code_block(text)
+        self.assertIn("first", result)
+        self.assertNotIn("second", result)
 
 
 if __name__ == "__main__":

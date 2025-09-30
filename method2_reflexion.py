@@ -64,6 +64,13 @@ def call_then_extract_code(model, messages, llm_responses):
     response, code_response_as_text = call_llm(model, messages)
     llm_responses.append(response)
     code_as_string = extract_from_code_block(code_response_as_text)
+    
+    # Handle case where no code block was found (after trying multiple extraction strategies)
+    if code_as_string is None:
+        code_as_string = ""
+        logger.warning("No code block found in LLM response after trying multiple extraction strategies")
+        logger.debug(f"LLM response content: {code_response_as_text[:500]}...")  # Log first 500 chars for debugging
+    
     logger.info("After calling the LLM, we get code back")
     logger.info(code_as_string)
     return code_as_string

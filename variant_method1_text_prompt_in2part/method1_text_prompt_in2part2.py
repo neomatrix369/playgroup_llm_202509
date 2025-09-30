@@ -63,6 +63,12 @@ def run_experiment(
     llm_responses.append(response)
     logger.info(f"Content: {content}")
     code_as_string = extract_from_code_block(content)
+    
+    # Handle case where no code block was found (after trying multiple extraction strategies)
+    if code_as_string is None:
+        code_as_string = ""
+        logger.warning("No code block found in LLM response after trying multiple extraction strategies")
+        logger.debug(f"LLM response content: {content[:500]}...")  # Log first 500 chars for debugging
 
     train_problems = problems["train"]
     rr_train = execute_transform(code_as_string, train_problems)

@@ -96,16 +96,42 @@ class ExecutionOutcome:
 
 
 def extract_from_code_block(text):
-    "Extract the first code block in a text string"
+    """Extract the first code block in a text string using multiple strategies."""
+    
+    # Strategy 1: Standard markdown with optional language and whitespace
+    patterns = [
+        r"```[a-zA-Z]*\s+(.*?)\s*```",         # Standard: ```python\n...\n``` (requires whitespace after lang/backticks)
+        r"```[a-zA-Z]+\n(.*?)```",             # With newline after language: ```python\n...```
+        r"```\n(.*?)```",                      # No language, newline: ```\n...```
+        r"```([^`]+)```",                      # Anything between backticks that's not a backtick
+    ]
+    
+    # Try each pattern
+    for pattern in patterns:
+        try:
+            re_groups = re.search(pattern, text, re.DOTALL)
+            if re_groups:
+                result = re_groups.group(1).strip()
+                # Make sure we got something non-empty and not just the language name
+                if result and not result.isalpha():  # Skip if it's just a word (likely language name)
+                    return result
+        except (AttributeError, IndexError):
+            continue
+    
+    # Strategy 2: Look for code starting with 'def transform(' even without markdown
     try:
-        # result = re.search(r"```\s(.*?)\s```", text, re.DOTALL).group(1)
-        # this also gets ///python
-        re_groups = re.search(r"```[a-zA-Z]*\s(.*?)\s```", text, re.DOTALL)
-        # group(0) is the whole match, group(1) is the first capture group
-        result = re_groups.group(1)
-    except AttributeError:
-        result = None
-    return result
+        # Find code that starts with def transform and capture until the end or next markdown
+        code_pattern = r'(def transform\(.*?)(?=```|$)'
+        re_groups = re.search(code_pattern, text, re.DOTALL)
+        if re_groups:
+            result = re_groups.group(1).strip()
+            if result:
+                return result
+    except (AttributeError, IndexError):
+        pass
+    
+    # If all strategies fail, return None
+    return None
 
 
 def extract_explanation(text):
