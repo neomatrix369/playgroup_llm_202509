@@ -53,6 +53,7 @@ from output.output_generator import OutputGenerator
 from output.console_display import ConsoleDisplay
 from core.timing_tracker import TimingTracker
 from core.experiment_config import ExperimentConfigResolver
+from core.experiment_executor import ExperimentExecutor
 
 
 class BatchExperimentRunner:
@@ -75,6 +76,10 @@ class BatchExperimentRunner:
         # Note: These will be initialized after results_data is populated
         self._output_generator: Optional[OutputGenerator] = None
         self._console_display: Optional[ConsoleDisplay] = None
+        
+        # Experiment executor (Phase 2A refactoring)
+        # Note: Initialized with callbacks to maintain coupling with runner state
+        self._executor: Optional[ExperimentExecutor] = None
 
     def parse_arguments(self) -> argparse.Namespace:
         """Parse command line arguments with comprehensive options."""
@@ -170,6 +175,20 @@ Examples:
         if self._console_display is None:
             self._console_display = ConsoleDisplay(self._timing)
         return self._console_display
+    
+    def _get_executor(self) -> ExperimentExecutor:
+        """Get or create ExperimentExecutor instance (lazy initialization)."""
+        if self._executor is None:
+            self._executor = ExperimentExecutor(
+                timing_tracker=self._timing,
+                log_callback=self.log_timestamp,
+                format_duration_callback=self.format_duration,
+                log_file_handle=self.log_file_handle
+            )
+            # Sync state
+            self.failed_experiments = self._executor.failed_experiments
+            self.total_experiments_attempted = self._executor.total_experiments_attempted
+        return self._executor
 
     def validate_prerequisites(self, templates_to_use: List[str], problems_to_use: List[str], method_module: Any, args: argparse.Namespace) -> Tuple[bool, List[str]]:
         """Validate all prerequisites before starting experiments."""
@@ -222,11 +241,9 @@ Examples:
 
     def setup_experiment_without_argparse(self, experiment_folder: Path) -> Tuple[Any, str]:
         """Setup experiment folder and database without re-parsing arguments."""
-        logger = utils.setup_logging(experiment_folder)
-        logger.info("Started experiment")
-        db_filename = utils.make_db(experiment_folder)
-        logger.info(f"Database created at: {db_filename}")
-        return logger, db_filename
+        # Delegate to ExperimentExecutor (Phase 2A refactoring)
+        executor = self._get_executor()
+        return executor.setup_experiment(experiment_folder)
 
     def run_single_experiment(
         self,
@@ -237,87 +254,13 @@ Examples:
         experiment_folder: Path
     ) -> Tuple[List[Any], List[Any]]:
         """Run a single experiment with timing."""
-        self.log_timestamp(f"Starting individual test: {template} + {problem}")
-        self.total_experiments_attempted += 1
-
-        if args.dry_run:
-            print(f"[DRY-RUN] Would run {template} with {problem}")
-            return [], []
-
-        individual_start_time = time.time()
-
-        try:
-            # Setup for this specific experiment (without re-parsing arguments)
-            logger, db_filename = self.setup_experiment_without_argparse(experiment_folder)
-
-            # Load the specific problem
-            problems = utils.get_examples(problem)
-
-            # Set logger for the method module
-            method_module.logger = logger
-
-            # Print iteration progress header
-            print(f"    🔄 Running {args.iterations} iteration(s)...")
-            iteration_start_time = time.time()
-
-            # Run the experiment
-            llm_responses, rr_trains = method_module.run_experiment_for_iterations(
-                db_filename,
-                model=args.model,
-                iterations=args.iterations,
-                problems=problems,
-                template_name=template,
-            )
-
-            iteration_end_time = time.time()
-            iteration_duration = iteration_end_time - iteration_start_time
-
-            # Show iteration timing summary
-            avg_per_iteration = iteration_duration / args.iterations if args.iterations > 0 else 0
-            print(f"    ✓ Completed {args.iterations} iteration(s) in {self.format_duration(iteration_duration)}")
-            print(f"      (avg: {self.format_duration(avg_per_iteration)} per iteration)")
-
-            individual_end_time = time.time()
-            individual_duration = individual_end_time - individual_start_time
-
-            # Store timing
-            self._timing.record_individual_duration(template, problem, individual_duration)
-
-            formatted_duration = self.format_duration(individual_duration)
-            self.log_timestamp(f"Individual test completed successfully in {formatted_duration}")
-
-            return llm_responses, rr_trains
-
-        except Exception as e:
-            individual_end_time = time.time()
-            individual_duration = individual_end_time - individual_start_time
-
-            # Store timing even for failures
-            self._timing.record_individual_duration(template, problem, individual_duration)
-
-            # Record the failure
-            self.failed_experiments.append({
-                'template': template,
-                'problem': problem,
-                'error': str(e),
-                'duration': individual_duration,
-                'traceback': traceback.format_exc() if args.verbose else None
-            })
-
-            formatted_duration = self.format_duration(individual_duration)
-            self.log_timestamp(f"Individual test failed after {formatted_duration}: {str(e)}")
-
-            # Log full traceback to file
-            if self.log_file_handle:
-                self.log_file_handle.write(f"\n{'='*60}\n")
-                self.log_file_handle.write(f"FAILURE: {template} + {problem}\n")
-                self.log_file_handle.write(f"Error: {str(e)}\n")
-                self.log_file_handle.write(f"{'='*60}\n")
-                self.log_file_handle.write(traceback.format_exc())
-                self.log_file_handle.write(f"\n{'='*60}\n\n")
-                self.log_file_handle.flush()
-
-            raise e
+        # Delegate to ExperimentExecutor (Phase 2A refactoring)
+        executor = self._get_executor()
+        result = executor.run_experiment(template, problem, method_module, args, experiment_folder)
+        # Sync state back to main runner
+        self.total_experiments_attempted = executor.total_experiments_attempted
+        self.failed_experiments = executor.failed_experiments
+        return result
 
     def analyze_results(
         self,
@@ -328,53 +271,9 @@ Examples:
         verbose: bool = False
     ) -> Dict[str, Any]:
         """Analyze experiment results for success rates with real-time feedback."""
-        all_correct = 0
-        at_least_one_correct = 0
-
-        print(f"    📊 Analyzing {iterations} iteration(s) for {problem}:")
-
-        formatter = IterationStatusFormatter()
-
-        for i, rr_train in enumerate(rr_trains, 1):
-            ran_all_train_problems_correctly = rr_train[0].transform_ran_and_matched_for_all_inputs
-            ran_at_least_one_train_problem_correctly = rr_train[0].transform_ran_and_matched_at_least_once
-
-            # Get detailed sub-problem results
-            execution_outcomes = rr_train[1] if len(rr_train) > 1 else []
-
-            # Determine status and display
-            status_icon, status_text = formatter.format_status(
-                ran_all_train_problems_correctly, ran_at_least_one_train_problem_correctly
-            )
-            formatter.print_iteration_status(i, status_icon, status_text, execution_outcomes, verbose)
-
-            # Count successes
-            if ran_all_train_problems_correctly:
-                all_correct += 1
-            if ran_at_least_one_train_problem_correctly:
-                at_least_one_correct += 1
-
-        # Summary for this problem
-        all_correct_rate = all_correct / iterations
-        at_least_one_rate = at_least_one_correct / iterations
-
-        summary_icon, summary_color = formatter.format_summary_status(all_correct_rate, at_least_one_rate)
-        formatter.print_problem_summary(
-            problem, all_correct, at_least_one_correct, iterations,
-            all_correct_rate, at_least_one_rate, summary_icon, summary_color
-        )
-
-        return {
-            "template": template,
-            "problem": problem,
-            "total_runs": iterations,
-            "all_correct": all_correct,
-            "at_least_one_correct": at_least_one_correct,
-            "all_correct_rate": all_correct_rate,
-            "at_least_one_correct_rate": at_least_one_rate,
-            "individual_duration": self._timing.get_individual_duration(template, problem),
-            "problem_duration": self._timing.get_problem_duration(template, problem),
-        }
+        # Delegate to ExperimentExecutor (Phase 2A refactoring)
+        executor = self._get_executor()
+        return executor.analyze_results(template, problem, rr_trains, iterations, verbose)
 
     def generate_console_table(self) -> None:
         """Generate formatted console table."""
