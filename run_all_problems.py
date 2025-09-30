@@ -36,10 +36,8 @@ except ImportError:
     load_dotenv = lambda: None
 
 import utils
-from utils import do_first_setup
 
 # Refactored classes to eliminate duplication
-from domain.value_objects import SuccessThresholds, DifficultyThresholds
 from analysis.performance_grader import PerformanceGrader
 from analysis.difficulty_classifier import DifficultyClassifier
 from analysis.statistics_aggregator import (
@@ -48,7 +46,9 @@ from analysis.statistics_aggregator import (
     ExperimentStatisticsAggregator,
     BestTemplateRecommender
 )
-from output.report_writer import ReportWriter, ConsoleReporter
+from output.report_writer import ReportWriter
+from output.iteration_formatter import IterationStatusFormatter
+from output.failure_formatter import FailureSummaryFormatter
 from core.timing_tracker import TimingTracker
 
 
@@ -388,6 +388,8 @@ Examples:
 
         print(f"    📊 Analyzing {iterations} iteration(s) for {problem}:")
 
+        formatter = IterationStatusFormatter()
+
         for i, rr_train in enumerate(rr_trains, 1):
             ran_all_train_problems_correctly = rr_train[0].transform_ran_and_matched_for_all_inputs
             ran_at_least_one_train_problem_correctly = rr_train[0].transform_ran_and_matched_at_least_once
@@ -395,33 +397,15 @@ Examples:
             # Get detailed sub-problem results
             execution_outcomes = rr_train[1] if len(rr_train) > 1 else []
 
-            # Real-time feedback for each iteration
+            # Determine status and display
+            status_icon, status_text = formatter.format_status(
+                ran_all_train_problems_correctly, ran_at_least_one_train_problem_correctly
+            )
+            formatter.print_iteration_status(i, status_icon, status_text, execution_outcomes, verbose)
+
+            # Count successes
             if ran_all_train_problems_correctly:
                 all_correct += 1
-                status_icon = "✅"
-                status_text = "ALL_CORRECT"
-            elif ran_at_least_one_train_problem_correctly:
-                status_icon = "⚠️"
-                status_text = "PARTIAL"
-            else:
-                status_icon = "❌"
-                status_text = "FAILED"
-
-            # Show detailed iteration results
-            print(f"      Iteration {i}: {status_icon} {status_text}")
-
-            # Show sub-problem details if we have execution outcomes
-            if execution_outcomes and verbose:
-                for j, outcome in enumerate(execution_outcomes):
-                    sub_icon = "✅" if outcome.was_correct else "❌"
-                    print(f"        Sub-problem {j+1}: {sub_icon} {'PASS' if outcome.was_correct else 'FAIL'}")
-            elif execution_outcomes:
-                # Show summary of sub-problems even without verbose
-                correct_count = sum(1 for outcome in execution_outcomes if outcome.was_correct)
-                total_count = len(execution_outcomes)
-                print(f"        Sub-problems: {correct_count}/{total_count} correct")
-
-            # Count at_least_one_correct properly
             if ran_at_least_one_train_problem_correctly:
                 at_least_one_correct += 1
 
@@ -429,21 +413,11 @@ Examples:
         all_correct_rate = all_correct / iterations
         at_least_one_rate = at_least_one_correct / iterations
 
-        if all_correct_rate >= 0.8:
-            summary_icon = "🎯"
-            summary_color = "EXCELLENT"
-        elif all_correct_rate >= 0.5:
-            summary_icon = "✅"
-            summary_color = "GOOD"
-        elif at_least_one_rate >= 0.5:
-            summary_icon = "⚠️"
-            summary_color = "PARTIAL"
-        else:
-            summary_icon = "❌"
-            summary_color = "POOR"
-
-        print(f"    {summary_icon} Problem Results: {all_correct}/{iterations} all correct ({all_correct_rate:.1%}), "
-              f"{at_least_one_correct}/{iterations} partial ({at_least_one_rate:.1%}) - {summary_color}")
+        summary_icon, summary_color = formatter.format_summary_status(all_correct_rate, at_least_one_rate)
+        formatter.print_problem_summary(
+            problem, all_correct, at_least_one_correct, iterations,
+            all_correct_rate, at_least_one_rate, summary_icon, summary_color
+        )
 
         return {
             "template": template,
@@ -855,46 +829,14 @@ Examples:
 
     def _generate_failure_summary(self) -> None:
         """Generate and print failure summary."""
-        if not self.failed_experiments:
-            return
+        formatter = FailureSummaryFormatter()
 
-        print(f"\n{'='*80}")
-        print(f"⚠️  FAILURE SUMMARY ⚠️")
-        print(f"{'='*80}")
-        print(f"Total experiments attempted: {self.total_experiments_attempted}")
-        print(f"Failed experiments: {len(self.failed_experiments)}")
-        print(f"Success rate: {(self.total_experiments_attempted - len(self.failed_experiments)) / self.total_experiments_attempted:.1%}")
-        print(f"\n📋 Failed Experiment Details:")
-        print("─" * 70)
-
-        for i, failure in enumerate(self.failed_experiments, 1):
-            print(f"\n❌ Failure #{i}:")
-            print(f"   Template: {failure['template']}")
-            print(f"   Problem: {failure['problem']}")
-            print(f"   Error: {failure['error']}")
-            print(f"   Duration: {self.format_duration(failure['duration'])}")
-
-        print(f"\n{'='*80}")
+        # Print to console
+        formatter.print_console_summary(self.failed_experiments, self.total_experiments_attempted)
 
         # Also log to file if available
         if self.log_file_handle:
-            self.log_file_handle.write(f"\n{'='*80}\n")
-            self.log_file_handle.write("FAILURE SUMMARY\n")
-            self.log_file_handle.write(f"{'='*80}\n")
-            self.log_file_handle.write(f"Total experiments attempted: {self.total_experiments_attempted}\n")
-            self.log_file_handle.write(f"Failed experiments: {len(self.failed_experiments)}\n\n")
-
-            for i, failure in enumerate(self.failed_experiments, 1):
-                self.log_file_handle.write(f"\nFailure #{i}:\n")
-                self.log_file_handle.write(f"  Template: {failure['template']}\n")
-                self.log_file_handle.write(f"  Problem: {failure['problem']}\n")
-                self.log_file_handle.write(f"  Error: {failure['error']}\n")
-                self.log_file_handle.write(f"  Duration: {self.format_duration(failure['duration'])}\n")
-                if failure.get('traceback'):
-                    self.log_file_handle.write(f"\nTraceback:\n{failure['traceback']}\n")
-
-            self.log_file_handle.write(f"\n{'='*80}\n\n")
-            self.log_file_handle.flush()
+            formatter.write_file_summary(self.log_file_handle, self.failed_experiments, self.total_experiments_attempted)
 
     def generate_persistent_summary(self, base_output_dir: Path, aggregated_data: Dict[str, Any]) -> List[str]:
         """Generate persistent summary files that aggregate all experiments."""
