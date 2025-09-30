@@ -46,6 +46,7 @@ from analysis.statistics_aggregator import (
     ExperimentStatisticsAggregator,
     BestTemplateRecommender
 )
+from analysis.experiment_aggregator import ExperimentAggregator
 from output.report_writer import ReportWriter
 from output.iteration_formatter import IterationStatusFormatter
 from output.failure_formatter import FailureSummaryFormatter
@@ -84,6 +85,9 @@ class BatchExperimentRunner:
         
         # Experiment validator (Phase 2B refactoring)
         self._validator: Optional[ExperimentValidator] = None
+        
+        # Experiment aggregator (Phase 2C refactoring)
+        self._aggregator: Optional[ExperimentAggregator] = None
 
     def parse_arguments(self) -> argparse.Namespace:
         """Parse command line arguments with comprehensive options."""
@@ -199,6 +203,23 @@ Examples:
         if self._validator is None:
             self._validator = ExperimentValidator(log_callback=self.log_timestamp)
         return self._validator
+    
+    def _get_aggregator(self) -> ExperimentAggregator:
+        """Get or create ExperimentAggregator instance (lazy initialization)."""
+        if self._aggregator is None:
+            # Provide ranking analysis callback
+            def ranking_callback(results_data):
+                # Temporarily use the provided results for analysis
+                original = self.results_data
+                self.results_data = results_data
+                analysis = self.generate_ranking_analysis()
+                self.results_data = original
+                return analysis
+            
+            self._aggregator = ExperimentAggregator(
+                ranking_analysis_callback=ranking_callback
+            )
+        return self._aggregator
 
     def validate_prerequisites(self, templates_to_use: List[str], problems_to_use: List[str], method_module: Any, args: argparse.Namespace) -> Tuple[bool, List[str]]:
         """Validate all prerequisites before starting experiments."""
@@ -546,98 +567,21 @@ Examples:
 
     def discover_existing_experiments(self, base_output_dir: Path) -> List[Dict[str, Any]]:
         """Discover existing experiment result directories and load their data."""
-        if not base_output_dir.exists():
-            print(f"⚠️  Output directory {base_output_dir} does not exist")
-            return []
-
-        experiment_dirs = []
-        for item in base_output_dir.iterdir():
-            if item.is_dir() and item.name.replace('_', '').replace('-', '').isdigit():
-                # Look for CSV files in the directory
-                csv_files = list(item.glob("batch_results_*.csv"))
-                if csv_files:
-                    experiment_dirs.append({
-                        'directory': item,
-                        'timestamp': item.name,
-                        'csv_file': csv_files[0],
-                        'date': item.stat().st_mtime
-                    })
-
-        # Sort by date (most recent first)
-        experiment_dirs.sort(key=lambda x: x['date'], reverse=True)
-        return experiment_dirs
+        # Delegate to ExperimentAggregator (Phase 2C refactoring)
+        aggregator = self._get_aggregator()
+        return aggregator.discover_experiments(base_output_dir)
 
     def load_experiment_data(self, csv_file: Path) -> List[Dict[str, Any]]:
         """Load experiment data from CSV file."""
-        if pd is None:
-            print("⚠️  pandas not available, cannot load experiment data")
-            return []
-
-        try:
-            df = pd.read_csv(csv_file)
-            return df.to_dict('records')
-        except Exception as e:
-            print(f"⚠️  Error loading {csv_file}: {e}")
-            return []
+        # Delegate to ExperimentAggregator (Phase 2C refactoring)
+        aggregator = self._get_aggregator()
+        return aggregator.load_data(csv_file)
 
     def aggregate_experiment_data(self, all_experiments: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Aggregate data from multiple experiment runs."""
-        if not all_experiments:
-            return {}
-
-        # Combine all experiment data
-        all_results = []
-        experiment_metadata = []
-
-        for exp in all_experiments:
-            data = self.load_experiment_data(exp['csv_file'])
-            if data:
-                # Add metadata to each result
-                for result in data:
-                    result['experiment_timestamp'] = exp['timestamp']
-                    result['experiment_date'] = exp['date']
-                all_results.extend(data)
-
-                experiment_metadata.append({
-                    'timestamp': exp['timestamp'],
-                    'date': exp['date'],
-                    'result_count': len(data),
-                    'directory': str(exp['directory'])
-                })
-
-        if not all_results:
-            return {}
-
-        # Create temporary results data for analysis
-        original_results = self.results_data
-        self.results_data = all_results
-
-        # Generate analysis
-        analysis = self.generate_ranking_analysis()
-
-        # Restore original results
-        self.results_data = original_results
-
-        # Add aggregated statistics
-        # Refactored: Use aggregator classes (eliminates duplication #9)
-        template_aggregator = TemplateStatisticsAggregator(all_results)
-        template_stats = template_aggregator.aggregate_to_dict()
-
-        problem_aggregator = ProblemStatisticsAggregator(all_results)
-        problem_stats = problem_aggregator.aggregate_to_dict()
-
-        experiment_aggregator = ExperimentStatisticsAggregator(all_results)
-        experiment_stats = experiment_aggregator.aggregate_to_dict()
-
-        return {
-            'analysis': analysis,
-            'template_stats': template_stats,
-            'problem_stats': problem_stats,
-            'experiment_stats': experiment_stats,
-            'experiment_metadata': experiment_metadata,
-            'total_results': len(all_results),
-            'total_experiments': len(all_experiments)
-        }
+        # Delegate to ExperimentAggregator (Phase 2C refactoring)
+        aggregator = self._get_aggregator()
+        return aggregator.aggregate(all_experiments)
 
     def _generate_failure_summary(self) -> None:
         """Generate and print failure summary."""
