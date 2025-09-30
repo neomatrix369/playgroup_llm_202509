@@ -11,7 +11,7 @@ import logging
 from db import record_run
 from litellm_helper import call_llm, check_litellm_key, disable_litellm_logging
 from prompt import get_func_dict, make_prompt
-from run_code import execute_transform
+from run_code import execute_transform, should_request_regeneration
 
 # from litellm import completion
 from utils import (
@@ -53,7 +53,17 @@ def run_experiment(
         logger.debug(f"LLM response content: {content[:500]}...")  # Log first 500 chars for debugging
 
     train_problems = problems["train"]
-    rr_train = execute_transform(code_as_string, train_problems)
+    rr_train, execution_outcomes, exception_message = execute_transform(code_as_string, train_problems)
+
+    # Check if code regeneration is recommended
+    if exception_message:
+        should_regen, regen_reason = should_request_regeneration(exception_message, code_as_string)
+        if should_regen:
+            logger.warning(f"Code regeneration recommended: {regen_reason}")
+            logger.debug(f"Exception: {exception_message}")
+        else:
+            logger.info(f"Debugging preferred over regeneration: {regen_reason}")
+
     explanation = extract_explanation(content)
     record_run(
         db_filename,
@@ -61,10 +71,10 @@ def run_experiment(
         explanation,
         code_as_string,
         messages_plus_response,
-        rr_train[0].transform_ran_and_matched_for_all_inputs,
+        rr_train.transform_ran_and_matched_for_all_inputs,
     )
     logger.info(f"RR train: {rr_train}")
-    rr_trains.append(rr_train)
+    rr_trains.append((rr_train, execution_outcomes, exception_message))
 
 
 def run_experiment_for_iterations(

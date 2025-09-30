@@ -4,6 +4,11 @@ Example using a known problem with example coded solution:
 python run_code.py -p 0d3d703e -c example_solutions/ex_soln_0d3d703e.py
 python run_code.py -p 08ed6ac7 -c example_solutions/ex_soln_08ed6ac7.py
 python run_code.py -p 9565186b -c example_solutions/ex_soln_9565186b.py
+
+Public API:
+    execute_transform(code_string, problems) -> (RunResult, execution_outcomes, exception_message)
+    should_request_regeneration(exception_message, code_string) -> (should_regen, reason)
+    sanitize_code(code_string) -> cleaned_code_string
 """
 
 import copy
@@ -18,18 +23,116 @@ import utils
 from utils import ExecutionOutcome, RunResult
 
 
+def should_request_regeneration(exception_message, code_string=None):
+    """Determine if error warrants requesting code regeneration from LLM.
+
+    Args:
+        exception_message: The exception message from execute_transform
+        code_string: Optional code string for context analysis
+
+    Returns:
+        Tuple of (should_regen: bool, reason: str)
+    """
+    if not exception_message:
+        return False, "No error"
+
+    msg_lower = exception_message.lower()
+
+    # IMMEDIATE REGENERATION - Structural failures
+    structural_failures = [
+        ("code validation failed: code looks like data/output", "LLM returned data instead of code"),
+        ("code validation failed: code is empty", "No code provided"),
+        ("code validation failed: code doesn't contain 'def transform'", "Missing required transform function"),
+        ("name 'transform' is not defined", "Transform function not defined"),
+        ("transform() missing", "Incorrect function signature"),
+        ("transform() takes", "Wrong number of arguments"),
+    ]
+
+    for pattern, reason in structural_failures:
+        if pattern in msg_lower:
+            return True, f"STRUCTURAL: {reason}"
+
+    # DEBUGGING PREFERRED - Logic/Runtime errors
+    # These should use reflexion/debugging rather than full regeneration
+    debug_errors = [
+        "assertionerror",
+        "indexerror",
+        "keyerror",
+        "zerodivisionerror",
+        "attributeerror",
+        "typeerror",  # Most TypeErrors are logic issues
+    ]
+
+    for error_type in debug_errors:
+        if error_type in msg_lower:
+            return False, f"LOGIC: {error_type} - prefer debugging over regeneration"
+
+    # CONTEXT-DEPENDENT - Need more analysis
+    if "syntaxerror" in msg_lower or "indentationerror" in msg_lower:
+        # If we have the code, analyze how severe the syntax issues are
+        if code_string:
+            lines = [l.strip() for l in code_string.split('\n') if l.strip()]
+            # Simple heuristic: if code is very short (<5 lines), probably fundamentally broken
+            if len(lines) < 5:
+                return True, "SYNTAX: Code too short with syntax errors - likely malformed"
+        return True, "SYNTAX: Fundamental structure issues"
+
+    # Default: don't regenerate for unknown errors
+    return False, "UNKNOWN: Prefer debugging approach"
+
+
+def validate_code_structure(code_string):
+    """Validate that code string looks like actual Python code, not data/output.
+
+    Args:
+        code_string: Code string to validate
+
+    Returns:
+        Tuple of (is_valid: bool, error_message: str or None)
+    """
+    if not code_string or not code_string.strip():
+        return False, "Code is empty or whitespace only"
+
+    # Check if it looks like data/numbers instead of code
+    # If more than 50% of non-whitespace lines start with a digit, likely data
+    lines = [line.strip() for line in code_string.split('\n') if line.strip()]
+    if not lines:
+        return False, "No non-empty lines found"
+
+    digit_start_count = sum(1 for line in lines if line[0].isdigit())
+    if len(lines) > 2 and digit_start_count / len(lines) > 0.5:
+        return False, f"Code looks like data/output (too many lines starting with digits: {digit_start_count}/{len(lines)})"
+
+    # Check for basic Python keywords/structure
+    code_lower = code_string.lower()
+    has_def = 'def ' in code_lower
+    has_import = 'import ' in code_lower
+    has_python_keywords = any(kw in code_lower for kw in ['return', 'if ', 'for ', 'while ', 'class '])
+
+    # Should have at least a function definition or some Python structure
+    if not (has_def or has_import or has_python_keywords):
+        return False, "Code doesn't contain expected Python keywords (def, import, return, etc.)"
+
+    # Note: We don't strictly require 'def transform' here because:
+    # 1. The code might have a differently-named function (will fail later with NameError)
+    # 2. We want code_did_execute=True for valid Python that just has wrong function name
+    # 3. Strict validation happens naturally when transform() is called
+
+    return True, None
+
+
 def sanitize_code(code_string):
     """Clean up common LLM artifacts from generated code.
-    
+
     Args:
         code_string: Raw code string from LLM
-        
+
     Returns:
         Cleaned code string ready for execution
     """
     if not code_string:
         return code_string
-    
+
     # Remove common Unicode characters that aren't valid Python
     # → (right arrow), ← (left arrow), etc.
     unicode_replacements = {
@@ -44,21 +147,21 @@ def sanitize_code(code_string):
         '–': '-',   # En dash to hyphen
         '—': '-',   # Em dash to hyphen
     }
-    
+
     for unicode_char, replacement in unicode_replacements.items():
         code_string = code_string.replace(unicode_char, replacement)
-    
+
     # Remove any remaining non-ASCII characters that might cause issues
     # but preserve common ones like é, ñ in comments
     # This is conservative - only remove characters that are definitely problematic
     code_string = re.sub(r'[\u2190-\u21FF]', '', code_string)  # Remove arrows and technical symbols
-    
+
     # Fix common indentation issues - dedent to normalize
     try:
         code_string = textwrap.dedent(code_string)
     except Exception:
         pass  # If dedent fails, continue with original
-    
+
     return code_string
 
 
@@ -97,7 +200,12 @@ def execute_transform(code_as_line, problems):
     try:
         # Sanitize the code to remove common LLM artifacts
         code_as_line = sanitize_code(code_as_line)
-        
+
+        # Validate code structure before attempting execution
+        is_valid, validation_error = validate_code_structure(code_as_line)
+        if not is_valid:
+            raise ValueError(f"Code validation failed: {validation_error}")
+
         exec(code_as_line, globals())  # try to generate transform function
         # transform # check if transform is in namespace
         # print(f"transform in namespace: {'transform' in dir()}")
@@ -137,9 +245,10 @@ def execute_transform(code_as_line, problems):
                 try:
                     result = exec_and_run(code_as_line, np.array(copy.deepcopy(prob["input"])))
                     result_chunks.append(result)
-                except Exception:
-                    # If individual execution fails, append None to maintain index alignment
-                    result_chunks.append(None)
+                except Exception as e:
+                    # If individual execution fails, re-raise to be caught by outer handler
+                    # This ensures we don't create execution_outcomes for failed code
+                    raise
 
         for prob_n, prob in enumerate(problems):
             # wrapped in copies as a self protection mechanism
