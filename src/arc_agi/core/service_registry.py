@@ -12,13 +12,13 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
 # Avoid circular imports by using TYPE_CHECKING
 if TYPE_CHECKING:
-    from output.output_generator import OutputGenerator
-    from output.console_display import ConsoleDisplay
-    from core.experiment_executor import ExperimentExecutor
-    from core.experiment_validator import ExperimentValidator
-    from analysis.experiment_aggregator import ExperimentAggregator
-    from analysis.experiment_summarizer import ExperimentSummarizer
-    from core.experiment_loop_orchestrator import ExperimentLoopOrchestrator
+    from arc_agi.output.output_generator import OutputGenerator
+    from arc_agi.output.console_display import ConsoleDisplay
+    from arc_agi.core.experiment_executor import ExperimentExecutor
+    from arc_agi.core.experiment_validator import ExperimentValidator
+    from arc_agi.analysis.experiment_aggregator import ExperimentAggregator
+    from arc_agi.analysis.experiment_summarizer import ExperimentSummarizer
+    from arc_agi.core.experiment_loop_orchestrator import ExperimentLoopOrchestrator
 
 from arc_agi.core.timing_tracker import TimingTracker
 from arc_agi.domain.value_objects import SuccessThresholds
@@ -137,19 +137,19 @@ class ServiceFactory:
 
     def create_output_generator(self) -> "OutputGenerator":
         """Create OutputGenerator instance."""
-        from output.output_generator import OutputGenerator
+        from arc_agi.output.output_generator import OutputGenerator
 
         return OutputGenerator(self.results_accessor(), self.timing)
 
     def create_console_display(self) -> "ConsoleDisplay":
         """Create ConsoleDisplay instance."""
-        from output.console_display import ConsoleDisplay
+        from arc_agi.output.console_display import ConsoleDisplay
 
         return ConsoleDisplay(self.timing)
 
     def create_executor(self) -> "ExperimentExecutor":
         """Create ExperimentExecutor instance."""
-        from core.experiment_executor import ExperimentExecutor
+        from arc_agi.core.experiment_executor import ExperimentExecutor
 
         return ExperimentExecutor(
             timing_tracker=self.timing,
@@ -160,19 +160,19 @@ class ServiceFactory:
 
     def create_validator(self) -> "ExperimentValidator":
         """Create ExperimentValidator instance."""
-        from core.experiment_validator import ExperimentValidator
+        from arc_agi.core.experiment_validator import ExperimentValidator
 
         return ExperimentValidator(log_callback=self.log_callback)
 
     def create_aggregator(self) -> "ExperimentAggregator":
         """Create ExperimentAggregator instance."""
-        from analysis.experiment_aggregator import ExperimentAggregator
+        from arc_agi.analysis.experiment_aggregator import ExperimentAggregator
 
         return ExperimentAggregator(ranking_analysis_callback=self.generate_ranking_analysis)
 
     def create_summarizer(self, aggregator) -> "ExperimentSummarizer":
         """Create ExperimentSummarizer instance."""
-        from analysis.experiment_summarizer import ExperimentSummarizer
+        from arc_agi.analysis.experiment_summarizer import ExperimentSummarizer
 
         return ExperimentSummarizer(
             aggregator=aggregator,
@@ -182,7 +182,7 @@ class ServiceFactory:
 
     def create_loop_orchestrator(self) -> "ExperimentLoopOrchestrator":
         """Create ExperimentLoopOrchestrator instance."""
-        from core.experiment_loop_orchestrator import ExperimentLoopOrchestrator
+        from arc_agi.core.experiment_loop_orchestrator import ExperimentLoopOrchestrator
 
         return ExperimentLoopOrchestrator(
             timing_tracker=self.timing,

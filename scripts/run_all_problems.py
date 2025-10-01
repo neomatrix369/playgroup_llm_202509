@@ -38,15 +38,15 @@ except ImportError:
 
 
 # Refactored classes to eliminate duplication
-from core.checkpoint_manager import CheckpointManager
-from core.experiment_argument_parser import ExperimentArgumentParser
-from core.experiment_config import ExperimentConfigResolver
-from core.experiment_coordinator import ExperimentCoordinator
-from core.service_registry import ServiceFactory, ServiceRegistry
-from core.timing_tracker import TimingTracker
-from domain.experiment_state import ExperimentContext, ExperimentResults
-from domain.value_objects import SuccessThresholds
-from output.failure_formatter import FailureSummaryFormatter
+from arc_agi.core.checkpoint_manager import CheckpointManager
+from arc_agi.core.experiment_argument_parser import ExperimentArgumentParser
+from arc_agi.core.experiment_config import ExperimentConfigResolver
+from arc_agi.core.experiment_coordinator import ExperimentCoordinator
+from arc_agi.core.service_registry import ServiceFactory, ServiceRegistry
+from arc_agi.core.timing_tracker import TimingTracker
+from arc_agi.domain.experiment_state import ExperimentContext, ExperimentResults
+from arc_agi.domain.value_objects import SuccessThresholds
+from arc_agi.output.failure_formatter import FailureSummaryFormatter
 
 
 class BatchExperimentRunner:
