@@ -7,7 +7,7 @@ Eliminates duplication from 2 sites in run_all_problems.py:
 - Lines 1118-1120 (generate_persistent_summary)
 """
 
-from domain.value_objects import DifficultyLevel, DifficultyThresholds
+from arc_agi.domain.value_objects import DifficultyLevel, DifficultyThresholds
 
 
 class DifficultyClassifier:

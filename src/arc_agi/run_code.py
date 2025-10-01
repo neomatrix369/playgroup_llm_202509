@@ -18,8 +18,9 @@ import textwrap
 
 import joblib
 import numpy as np
-import utils
-from utils import ExecutionOutcome, RunResult
+
+from arc_agi import utils
+from arc_agi.utils import ExecutionOutcome, RunResult
 
 
 def should_request_regeneration(exception_message, code_string=None):
@@ -170,9 +171,7 @@ def sanitize_code(code_string):
     # Remove any remaining non-ASCII characters that might cause issues
     # but preserve common ones like é, ñ in comments
     # This is conservative - only remove characters that are definitely problematic
-    code_string = re.sub(
-        r"[\u2190-\u21FF]", "", code_string
-    )  # Remove arrows and technical symbols
+    code_string = re.sub(r"[\u2190-\u21FF]", "", code_string)  # Remove arrows and technical symbols
 
     # Fix common indentation issues - dedent to normalize
     try:
@@ -205,9 +204,7 @@ def exec_and_run(code_as_line, initial):
 def execute_transform(code_as_line, problems):
     """Run the code on training problems (with train/test pair), output a summary"""
     transform_at_least_one_ran = False  # we succeeded on at least one input
-    transform_all_ran_and_matched = (
-        False  # 1 if we succeeded on all inputs to match desired final
-    )
+    transform_all_ran_and_matched = False  # 1 if we succeeded on all inputs to match desired final
     partial_score = 0  # how often did transform correctly turn initial into final?
     code_ran_on_all_inputs = False  # this code ran on all inputs, 1 if true
     code_executed = False  # did code_as_line run through exec without error?
@@ -245,9 +242,7 @@ def execute_transform(code_as_line, problems):
             # n_jobs = 1 for serial process
             # result_chunks = joblib.Parallel(n_jobs=len(problems), timeout=1)(
             result_chunks = joblib.Parallel(n_jobs=n_jobs, timeout=5)(
-                joblib.delayed(exec_and_run)(
-                    code_as_line, np.array(copy.deepcopy(prob["input"]))
-                )
+                joblib.delayed(exec_and_run)(code_as_line, np.array(copy.deepcopy(prob["input"])))
                 for prob in problems
             )
         except (RuntimeError, pickle.PicklingError, joblib.parallel.TimeoutError):
@@ -261,9 +256,7 @@ def execute_transform(code_as_line, problems):
             result_chunks = []
             for prob in problems:
                 try:
-                    result = exec_and_run(
-                        code_as_line, np.array(copy.deepcopy(prob["input"]))
-                    )
+                    result = exec_and_run(code_as_line, np.array(copy.deepcopy(prob["input"])))
                     result_chunks.append(result)
                 except Exception:
                     # If individual execution fails, re-raise to be caught by outer handler

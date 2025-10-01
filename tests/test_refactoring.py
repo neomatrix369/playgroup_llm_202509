@@ -5,14 +5,13 @@ Quick validation tests for refactored classes.
 Run: python test_refactoring.py
 """
 
-from domain.value_objects import (
+from arc_agi.analysis.difficulty_classifier import DifficultyClassifier
+from arc_agi.analysis.performance_grader import PerformanceGrader
+from arc_agi.domain.value_objects import (
     DifficultyThresholds,
     ExperimentResult,
     SuccessThresholds,
 )
-
-from analysis.difficulty_classifier import DifficultyClassifier
-from analysis.performance_grader import PerformanceGrader
 
 
 def test_performance_grader():

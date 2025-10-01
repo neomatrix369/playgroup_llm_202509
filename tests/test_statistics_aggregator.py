@@ -5,14 +5,13 @@ Quick validation tests for statistics aggregator classes.
 Run: python test_statistics_aggregator.py
 """
 
-from domain.stats_models import ExperimentStats, ProblemStats, TemplateStats
-
-from analysis.statistics_aggregator import (
+from arc_agi.analysis.statistics_aggregator import (
     BestTemplateRecommender,
     ExperimentStatisticsAggregator,
     ProblemStatisticsAggregator,
     TemplateStatisticsAggregator,
 )
+from arc_agi.domain.stats_models import ExperimentStats, ProblemStats, TemplateStats
 
 
 def test_template_stats_model():

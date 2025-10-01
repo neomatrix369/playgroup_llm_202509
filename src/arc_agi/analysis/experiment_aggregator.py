@@ -22,7 +22,7 @@ try:
 except ImportError:
     pd = None
 
-from analysis.statistics_aggregator import (
+from arc_agi.analysis.statistics_aggregator import (
     ExperimentStatisticsAggregator,
     ProblemStatisticsAggregator,
     TemplateStatisticsAggregator,

@@ -1,6 +1,6 @@
 import unittest
 
-from utils import extract_explanation, extract_from_code_block
+from arc_agi.utils import extract_explanation, extract_from_code_block
 
 # NOTE to Ian - entirely written by Cursor
 
@@ -22,9 +22,7 @@ class TestExtractExplanation(unittest.TestCase):
         </EXPLANATION>
         Some text after"""
         result = extract_explanation(text)
-        expected = (
-            "This is a multiline\n        explanation with\n        multiple lines"
-        )
+        expected = "This is a multiline\n        explanation with\n        multiple lines"
         self.assertEqual(result, expected)
 
     def test_extract_explanation_with_whitespace(self):
@@ -80,7 +78,9 @@ class TestExtractFromCodeBlock(unittest.TestCase):
 
     def test_extract_plain_def_transform(self):
         """Test extracting code that's not in markdown blocks but starts with def transform"""
-        text = "Here's the solution:\ndef transform(grid):\n    return grid[::-1]\n\nThat should work!"
+        text = (
+            "Here's the solution:\ndef transform(grid):\n    return grid[::-1]\n\nThat should work!"
+        )
         result = extract_from_code_block(text)
         self.assertIsNotNone(result)
         self.assertIn("def transform(grid)", result)
@@ -100,7 +100,9 @@ class TestExtractFromCodeBlock(unittest.TestCase):
 
     def test_extract_multiple_blocks(self):
         """Test extracting first code block when multiple are present"""
-        text = "```python\ndef first():\n    pass\n```\nText\n```python\ndef second():\n    pass\n```"
+        text = (
+            "```python\ndef first():\n    pass\n```\nText\n```python\ndef second():\n    pass\n```"
+        )
         result = extract_from_code_block(text)
         self.assertIn("first", result)
         self.assertNotIn("second", result)

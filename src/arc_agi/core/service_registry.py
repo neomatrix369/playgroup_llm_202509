@@ -20,8 +20,8 @@ if TYPE_CHECKING:
     from analysis.experiment_summarizer import ExperimentSummarizer
     from core.experiment_loop_orchestrator import ExperimentLoopOrchestrator
 
-from core.timing_tracker import TimingTracker
-from domain.value_objects import SuccessThresholds
+from arc_agi.core.timing_tracker import TimingTracker
+from arc_agi.domain.value_objects import SuccessThresholds
 
 
 class ServiceRegistry:
@@ -82,9 +82,7 @@ class ServiceRegistry:
     def summarizer(self) -> "ExperimentSummarizer":
         """Get or create ExperimentSummarizer."""
         if "summarizer" not in self._services:
-            self._services["summarizer"] = self._factory.create_summarizer(
-                self.aggregator()
-            )
+            self._services["summarizer"] = self._factory.create_summarizer(self.aggregator())
         return self._services["summarizer"]
 
     def loop_orchestrator(self) -> "ExperimentLoopOrchestrator":
@@ -92,9 +90,7 @@ class ServiceRegistry:
         if "loop_orchestrator" not in self._services:
             # Ensure executor is created first
             self.executor()
-            self._services["loop_orchestrator"] = (
-                self._factory.create_loop_orchestrator()
-            )
+            self._services["loop_orchestrator"] = self._factory.create_loop_orchestrator()
         return self._services["loop_orchestrator"]
 
     def clear(self) -> None:
@@ -172,9 +168,7 @@ class ServiceFactory:
         """Create ExperimentAggregator instance."""
         from analysis.experiment_aggregator import ExperimentAggregator
 
-        return ExperimentAggregator(
-            ranking_analysis_callback=self.generate_ranking_analysis
-        )
+        return ExperimentAggregator(ranking_analysis_callback=self.generate_ranking_analysis)
 
     def create_summarizer(self, aggregator) -> "ExperimentSummarizer":
         """Create ExperimentSummarizer instance."""

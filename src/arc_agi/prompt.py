@@ -1,8 +1,7 @@
-import representations
+from jinja2 import Environment, FileSystemLoader
 
 # import util_image_encoder
-import utils
-from jinja2 import Environment, FileSystemLoader
+from arc_agi import representations, utils
 
 # shows all the contents in one line
 # Please write a 1 sentence description about {{ patterns }}.
@@ -48,7 +47,5 @@ if __name__ == "__main__":
 
     func_dict = get_func_dict()
     patterns = utils.get_examples(args.problem_name)
-    prompt = make_prompt(
-        args.template_name, patterns, target="train", func_dict=get_func_dict()
-    )
+    prompt = make_prompt(args.template_name, patterns, target="train", func_dict=get_func_dict())
     print(prompt)

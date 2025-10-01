@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from analysis.experiment_aggregator import ExperimentAggregator
+from arc_agi.analysis.experiment_aggregator import ExperimentAggregator
 
 
 class ExperimentSummarizer:
@@ -74,9 +74,7 @@ class ExperimentSummarizer:
 
         if args.verbose:
             for i, exp in enumerate(experiments[:5], 1):
-                date_str = datetime.fromtimestamp(exp["date"]).strftime(
-                    "%Y-%m-%d %H:%M"
-                )
+                date_str = datetime.fromtimestamp(exp["date"]).strftime("%Y-%m-%d %H:%M")
                 print(f"   {i}. {exp['timestamp']} ({date_str})")
             if len(experiments) > 5:
                 print(f"   ... and {len(experiments) - 5} more")
@@ -95,9 +93,7 @@ class ExperimentSummarizer:
 
         # Generate persistent summary files
         self.log("💾 Generating persistent summary files...")
-        generated_files = self.generate_persistent_summary(
-            base_output_dir, aggregated_data
-        )
+        generated_files = self.generate_persistent_summary(base_output_dir, aggregated_data)
 
         # Display generated files
         self._display_generated_files(base_output_dir, generated_files)
@@ -152,9 +148,7 @@ class ExperimentSummarizer:
 
         print("=" * 75)
 
-    def _display_generated_files(
-        self, base_output_dir: Path, generated_files: list
-    ) -> None:
+    def _display_generated_files(self, base_output_dir: Path, generated_files: list) -> None:
         """Display list of generated summary files.
 
         Args:

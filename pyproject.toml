@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arc-agi"
+version = "0.1.0"
+description = "ARC-AGI Challenge Solver with LLM Integration"
+authors = [{name = "Ian Ozsvald"}]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy",
+    "pandas",
+    "jinja2",
+    "litellm",
+    "joblib",
+    "python-dotenv",
+    "tqdm",
+    "scikit-image",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "isort",
+    "pre-commit",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["arc_agi"]
+src_paths = ["src", "tests"]

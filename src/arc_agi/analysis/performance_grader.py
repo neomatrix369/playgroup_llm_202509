@@ -8,7 +8,7 @@ Eliminates duplication from 3 sites in run_all_problems.py:
 - Lines 1273-1274 (generate_summary_log)
 """
 
-from domain.value_objects import SuccessThresholds
+from arc_agi.domain.value_objects import SuccessThresholds
 
 
 class PerformanceGrader:

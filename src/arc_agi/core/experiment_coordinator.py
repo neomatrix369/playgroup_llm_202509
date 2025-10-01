@@ -14,8 +14,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from core.service_registry import ServiceRegistry
-from domain.experiment_state import ExperimentContext
+from arc_agi.core.service_registry import ServiceRegistry
+from arc_agi.domain.experiment_state import ExperimentContext
 
 
 class ExperimentCoordinator:
@@ -74,10 +74,8 @@ class ExperimentCoordinator:
         Returns:
             Total number of test combinations
         """
-        total_combinations = (
-            self.services.console_display().print_experiment_configuration(
-                args, templates_to_use, problems_to_use
-            )
+        total_combinations = self.services.console_display().print_experiment_configuration(
+            args, templates_to_use, problems_to_use
         )
         self.log_timestamp(
             f"✅ Configuration complete. Starting {total_combinations} test combinations."
@@ -126,9 +124,7 @@ class ExperimentCoordinator:
         try:
             method_module = importlib.import_module(args.method)
             print(f"Using module: {method_module.__file__}")
-            print(
-                f"Using entry point: {method_module.run_experiment_for_iterations.__name__}"
-            )
+            print(f"Using entry point: {method_module.run_experiment_for_iterations.__name__}")
             return method_module
         except ImportError as e:
             print(f"Error importing method module '{args.method}': {e}")

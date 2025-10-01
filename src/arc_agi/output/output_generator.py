@@ -27,16 +27,15 @@ try:
 except ImportError:
     pd = None
 
-from core.timing_tracker import TimingTracker
-from output.report_writer import ReportWriter
-
-from analysis.difficulty_classifier import DifficultyClassifier
-from analysis.performance_grader import PerformanceGrader
-from analysis.statistics_aggregator import (
+from arc_agi.analysis.difficulty_classifier import DifficultyClassifier
+from arc_agi.analysis.performance_grader import PerformanceGrader
+from arc_agi.analysis.statistics_aggregator import (
     BestTemplateRecommender,
     ProblemStatisticsAggregator,
     TemplateStatisticsAggregator,
 )
+from arc_agi.core.timing_tracker import TimingTracker
+from arc_agi.output.report_writer import ReportWriter
 
 
 class OutputGenerator:
@@ -46,9 +45,7 @@ class OutputGenerator:
     BatchExperimentRunner, reducing the main class by ~400 lines.
     """
 
-    def __init__(
-        self, results_data: List[Dict[str, Any]], timing_tracker: TimingTracker
-    ):
+    def __init__(self, results_data: List[Dict[str, Any]], timing_tracker: TimingTracker):
         """Initialize output generator.
 
         Args:
@@ -135,12 +132,8 @@ class OutputGenerator:
         df = pd.DataFrame(self.results_data)
 
         # Add timing columns
-        df["individual_duration_formatted"] = df["individual_duration"].apply(
-            self.format_duration
-        )
-        df["problem_duration_formatted"] = df["problem_duration"].apply(
-            self.format_duration
-        )
+        df["individual_duration_formatted"] = df["individual_duration"].apply(self.format_duration)
+        df["problem_duration_formatted"] = df["problem_duration"].apply(self.format_duration)
 
         # Add ranking information
         analysis = self.generate_ranking_analysis()
@@ -151,9 +144,7 @@ class OutputGenerator:
                 for i, r in enumerate(analysis["experiment_ranking"])
             }
             df["experiment_rank"] = df.apply(
-                lambda row: experiment_rankings.get(
-                    f"{row['template']}|{row['problem']}", 0
-                ),
+                lambda row: experiment_rankings.get(f"{row['template']}|{row['problem']}", 0),
                 axis=1,
             )
 
@@ -342,9 +333,7 @@ class OutputGenerator:
         ranking_file = output_dir / f"ranking_analysis_{timestamp}.log"
 
         with ReportWriter.open(ranking_file) as writer:
-            writer.section_header(
-                "🏆  COMPREHENSIVE RANKING & PERFORMANCE ANALYSIS  🏆"
-            )
+            writer.section_header("🏆  COMPREHENSIVE RANKING & PERFORMANCE ANALYSIS  🏆")
             writer.blank_line()
 
             # 1. Top performing experiments
@@ -365,9 +354,7 @@ class OutputGenerator:
                 writer.writeln(
                     f"      📊 {result['all_correct_rate']:6.1%} all correct, {result['at_least_one_correct_rate']:6.1%} partial"
                 )
-                writer.writeln(
-                    f"      ⏱️  {self.format_duration(result['individual_duration'])}\n"
-                )
+                writer.writeln(f"      ⏱️  {self.format_duration(result['individual_duration'])}\n")
 
             # 2. Template ranking
             writer.section_separator()
@@ -427,9 +414,7 @@ class OutputGenerator:
             # 4. Best template recommendations
             writer.section_separator()
             writer.subsection_header("🎯 OPTIMAL TEMPLATE RECOMMENDATIONS PER PROBLEM:")
-            for problem, recommendation in analysis[
-                "best_template_per_problem"
-            ].items():
+            for problem, recommendation in analysis["best_template_per_problem"].items():
                 writer.writeln(f"🎲 Problem: {problem}")
                 writer.writeln(
                     f"   🏆 Best: {recommendation['best_template'][:50]:50s} ({recommendation['best_score']:6.1%})"
@@ -459,9 +444,7 @@ class OutputGenerator:
                 f"   🎯 Excellent on {best_template['excellent_problems']}/{best_template['total_problems']} problems\n"
             )
 
-            writer.writeln(
-                f"⚠️  Most Challenging Template: {worst_template['template']}"
-            )
+            writer.writeln(f"⚠️  Most Challenging Template: {worst_template['template']}")
             writer.writeln(
                 f"   📊 Average success rate: {worst_template['avg_all_correct_rate']:.1%}\n"
             )
@@ -506,23 +489,15 @@ class OutputGenerator:
             f.write("📊  COMPREHENSIVE EXPERIMENT SUMMARY (ALL RUNS)  📊\n")
             f.write("=" * 80 + "\n\n")
             f.write(f"📅 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(
-                f"🧮 Total experiments analyzed: {aggregated_data['total_experiments']}\n"
-            )
-            f.write(
-                f"📊 Total individual results: {aggregated_data['total_results']}\n\n"
-            )
+            f.write(f"🧮 Total experiments analyzed: {aggregated_data['total_experiments']}\n")
+            f.write(f"📊 Total individual results: {aggregated_data['total_results']}\n\n")
 
             # Recent experiments
             f.write("🕒 RECENT EXPERIMENTS:\n")
             f.write("─" * 40 + "\n")
             for exp in aggregated_data["experiment_metadata"][:5]:
-                date_str = datetime.fromtimestamp(exp["date"]).strftime(
-                    "%Y-%m-%d %H:%M"
-                )
-                f.write(
-                    f"  📁 {exp['timestamp']}: {exp['result_count']} results ({date_str})\n"
-                )
+                date_str = datetime.fromtimestamp(exp["date"]).strftime("%Y-%m-%d %H:%M")
+                f.write(f"  📁 {exp['timestamp']}: {exp['result_count']} results ({date_str})\n")
 
             # Template performance
             if aggregated_data.get("analysis", {}).get("template_ranking"):
@@ -712,9 +687,7 @@ class OutputGenerator:
             f.write(f"⏱️  Total duration: {self.format_duration(total_duration)}\n\n")
 
             if self.results_data:
-                successful_tests = len(
-                    [r for r in self.results_data if r["all_correct_rate"] > 0]
-                )
+                successful_tests = len([r for r in self.results_data if r["all_correct_rate"] > 0])
                 f.write("📊 FINAL RESULTS SUMMARY:\n")
                 f.write("─" * 40 + "\n")
                 f.write(

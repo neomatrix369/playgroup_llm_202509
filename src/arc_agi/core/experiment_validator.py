@@ -17,8 +17,8 @@ Extracted from BatchExperimentRunner to reduce complexity and improve testabilit
 import argparse
 from typing import Any, Callable, List, Tuple
 
-import utils
-from core.experiment_config import ExperimentConfigResolver
+from arc_agi import utils
+from arc_agi.core.experiment_config import ExperimentConfigResolver
 
 
 class ExperimentValidator:
@@ -123,14 +123,10 @@ class ExperimentValidator:
                 # Test loading the first problem as a sanity check
                 test_problem = utils.get_examples(problems_to_use[0])
                 if not test_problem:
-                    errors.append(
-                        f"Problem {problems_to_use[0]} loaded but returned empty data"
-                    )
+                    errors.append(f"Problem {problems_to_use[0]} loaded but returned empty data")
                 else:
                     print(f"    ✓ Successfully loaded problem: {problems_to_use[0]}")
-                    print(
-                        f"      - Train examples: {len(test_problem.get('train', []))}"
-                    )
+                    print(f"      - Train examples: {len(test_problem.get('train', []))}")
                     print(f"      - Test examples: {len(test_problem.get('test', []))}")
             except Exception as e:
                 errors.append(f"Failed to load problem {problems_to_use[0]}: {str(e)}")
@@ -151,9 +147,7 @@ class ExperimentValidator:
         print("  ✓ Checking method module...")
 
         if not hasattr(method_module, "run_experiment_for_iterations"):
-            errors.append(
-                "Method module missing 'run_experiment_for_iterations' function"
-            )
+            errors.append("Method module missing 'run_experiment_for_iterations' function")
         else:
             print(f"    ✓ Method module loaded: {method_module.__file__}")
 

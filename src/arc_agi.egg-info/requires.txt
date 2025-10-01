@@ -1,0 +1,15 @@
+numpy
+pandas
+jinja2
+litellm
+joblib
+python-dotenv
+tqdm
+scikit-image
+
+[dev]
+pytest
+pytest-cov
+ruff
+isort
+pre-commit

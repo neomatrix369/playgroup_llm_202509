@@ -9,8 +9,10 @@ from datetime import datetime
 from pathlib import PurePath
 
 import numpy as np
-from db import make_db
 
+from arc_agi.db import make_db
+
+sys.path.insert(0, "scripts")
 import analysis
 
 

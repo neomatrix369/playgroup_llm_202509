@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
-import utils
-from run_code import exec_and_run, execute_transform, sanitize_code
+
+from arc_agi import utils
+from arc_agi.run_code import exec_and_run, execute_transform, sanitize_code
 
 CODE_1 = """
 def transform(initial):
@@ -174,9 +175,7 @@ def test_execute_transform_on_bad_fn():
     problems = problem_train_test["train"]
     assert_no_transform_pollution()
 
-    rr, execution_outcomes, exception_message = execute_transform(
-        CODE_BADLY_NAMED_FN, problems
-    )
+    rr, execution_outcomes, exception_message = execute_transform(CODE_BADLY_NAMED_FN, problems)
     assert rr.code_did_execute is True
     assert rr.transform_ran_and_matched_for_all_inputs is False
     assert "name 'transform' is not defined" in exception_message
@@ -184,17 +183,13 @@ def test_execute_transform_on_bad_fn():
     # print(exception_message)
 
     # TODO how to capture the fact that we got a name error which is useful?
-    rr, execution_outcomes, exception_message = execute_transform(
-        CODE_WRONG_TWOARGS, problems
-    )
+    rr, execution_outcomes, exception_message = execute_transform(CODE_WRONG_TWOARGS, problems)
     assert rr.code_did_execute is True
     assert rr.transform_ran_and_matched_for_all_inputs is False
     assert len(execution_outcomes) == 0
     assert "transform() missing 1 required" in exception_message
 
-    rr, execution_outcomes, exception_message = execute_transform(
-        CODE_WRONG_NOARGS, problems
-    )
+    rr, execution_outcomes, exception_message = execute_transform(CODE_WRONG_NOARGS, problems)
     assert rr.code_did_execute is True
     assert rr.transform_ran_and_matched_for_all_inputs is False
     assert len(execution_outcomes) == 0
@@ -234,9 +229,7 @@ def test_execute_transform2():
     problems = problem_train_test["train"]
 
     for code_block in [CODE_3, CODE_3_deepseek]:
-        rr, execution_outcomes, exception_message = execute_transform(
-            code_block, problems
-        )
+        rr, execution_outcomes, exception_message = execute_transform(code_block, problems)
         print(execution_outcomes)
         print(rr)
         assert rr.code_did_execute is True
@@ -253,9 +246,7 @@ def test_execute_transform2():
         # this variant returns tolist not np array, whilst it should
         # run it should also fail to be scored as only ndarray is
         # expected as the returned type
-        rr, execution_outcomes, exception_message = execute_transform(
-            CODE_3_tolist, problems
-        )
+        rr, execution_outcomes, exception_message = execute_transform(CODE_3_tolist, problems)
         print(rr)
         assert rr.code_did_execute is True
         assert rr.transform_ran_and_matched_score == 0
@@ -266,9 +257,7 @@ def test_execute_transform3():
     problems = problem_train_test["train"]
 
     for code_block in [CODE_4_0d3d703e]:
-        rr, execution_outcomes, exception_message = execute_transform(
-            code_block, problems
-        )
+        rr, execution_outcomes, exception_message = execute_transform(code_block, problems)
         print(execution_outcomes)
         print(rr)
         assert rr.code_did_execute is True

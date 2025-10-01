@@ -4,17 +4,18 @@
 # BONUS can you make it write code that solves this?
 
 
-from dotenv import load_dotenv
-from tqdm import tqdm
 import logging
 
-from db import record_run
-from litellm_helper import call_llm, check_litellm_key, disable_litellm_logging
-from prompt import get_func_dict, make_prompt
-from run_code import execute_transform, should_request_regeneration
+from dotenv import load_dotenv
+from tqdm import tqdm
+
+from arc_agi.db import record_run
+from arc_agi.litellm_helper import call_llm, check_litellm_key, disable_litellm_logging
+from arc_agi.prompt import get_func_dict, make_prompt
+from arc_agi.run_code import execute_transform, should_request_regeneration
 
 # from litellm import completion
-from utils import (
+from arc_agi.utils import (
     do_first_setup,
     do_last_report,
     extract_explanation,
@@ -54,17 +55,27 @@ def run_experiment(
         # Handle case where no code block was found (after trying multiple extraction strategies)
         if code_as_string is None:
             code_as_string = ""
-            logger.warning("No code block found in LLM response after trying multiple extraction strategies")
-            logger.debug(f"LLM response content: {content[:500]}...")  # Log first 500 chars for debugging
+            logger.warning(
+                "No code block found in LLM response after trying multiple extraction strategies"
+            )
+            logger.debug(
+                f"LLM response content: {content[:500]}..."
+            )  # Log first 500 chars for debugging
 
-        rr_train, execution_outcomes, exception_message = execute_transform(code_as_string, train_problems)
+        rr_train, execution_outcomes, exception_message = execute_transform(
+            code_as_string, train_problems
+        )
 
         # Check if code regeneration is recommended
         should_regen = False
         if exception_message:
-            should_regen, regen_reason = should_request_regeneration(exception_message, code_as_string)
+            should_regen, regen_reason = should_request_regeneration(
+                exception_message, code_as_string
+            )
             if should_regen:
-                logger.warning(f"Code regeneration recommended: {regen_reason} (attempt {retry_attempt + 1}/{MAX_RETRY_ATTEMPTS})")
+                logger.warning(
+                    f"Code regeneration recommended: {regen_reason} (attempt {retry_attempt + 1}/{MAX_RETRY_ATTEMPTS})"
+                )
                 logger.debug(f"Exception: {exception_message}")
             else:
                 logger.info(f"Debugging preferred over regeneration: {regen_reason}")
@@ -78,7 +89,9 @@ def run_experiment(
 
         # Either success, non-structural error, or out of retries - break and record
         if should_regen and retry_attempt == MAX_RETRY_ATTEMPTS - 1:
-            failure_msg = f"❌ Failed after {MAX_RETRY_ATTEMPTS} attempts, giving up on this iteration"
+            failure_msg = (
+                f"❌ Failed after {MAX_RETRY_ATTEMPTS} attempts, giving up on this iteration"
+            )
             logger.error(failure_msg)
             print(failure_msg)  # Also print to console for visibility
         break
@@ -96,18 +109,14 @@ def run_experiment(
     rr_trains.append((rr_train, execution_outcomes, exception_message))
 
 
-def run_experiment_for_iterations(
-    db_filename: str, model, iterations, problems, template_name
-):
+def run_experiment_for_iterations(db_filename: str, model, iterations, problems, template_name):
     """method1_text_prompt's run experiment"""
     llm_responses = []
     rr_trains = []
 
     # make a prompt before calling LLM
     func_dict = get_func_dict()
-    initial_prompt = make_prompt(
-        template_name, problems, target="train", func_dict=func_dict
-    )
+    initial_prompt = make_prompt(template_name, problems, target="train", func_dict=func_dict)
     logger.info(f"Prompt: {initial_prompt}")
 
     messages = [make_message_part(initial_prompt, "user")]

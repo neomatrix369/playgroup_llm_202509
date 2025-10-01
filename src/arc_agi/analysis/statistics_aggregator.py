@@ -11,9 +11,8 @@ Eliminates 200+ lines of duplication across run_all_problems.py
 
 from typing import Any, Dict, List
 
-from domain.stats_models import ExperimentStats, ProblemStats, TemplateStats
-
-from analysis.difficulty_classifier import DifficultyClassifier
+from arc_agi.analysis.difficulty_classifier import DifficultyClassifier
+from arc_agi.domain.stats_models import ExperimentStats, ProblemStats, TemplateStats
 
 
 class TemplateStatisticsAggregator:
@@ -128,9 +127,7 @@ class ExperimentStatisticsAggregator:
             experiment_key = f"{template}|{problem}"
 
             if experiment_key not in stats_by_experiment:
-                stats_by_experiment[experiment_key] = ExperimentStats(
-                    experiment_key=experiment_key
-                )
+                stats_by_experiment[experiment_key] = ExperimentStats(experiment_key=experiment_key)
             stats_by_experiment[experiment_key].add_result(result)
 
         return stats_by_experiment

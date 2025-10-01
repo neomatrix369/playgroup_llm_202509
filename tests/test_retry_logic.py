@@ -2,7 +2,7 @@
 
 from unittest.mock import Mock, patch
 
-from run_code import should_request_regeneration
+from arc_agi.run_code import should_request_regeneration
 
 
 def test_should_request_regeneration_structural_errors():
@@ -29,21 +29,23 @@ def test_should_request_regeneration_structural_errors():
 def test_should_request_regeneration_logic_errors():
     """Test that logic errors return should_regen=False"""
     # Test 1: AssertionError
-    exception_msg = (
-        "execute_transform caught: assertion failed of type(e)=<class 'AssertionError'>"
-    )
+    exception_msg = "execute_transform caught: assertion failed of type(e)=<class 'AssertionError'>"
     should_regen, reason = should_request_regeneration(exception_msg, None)
     assert should_regen is False
     assert "LOGIC" in reason
 
     # Test 2: IndexError
-    exception_msg = "execute_transform caught: list index out of range of type(e)=<class 'IndexError'>"
+    exception_msg = (
+        "execute_transform caught: list index out of range of type(e)=<class 'IndexError'>"
+    )
     should_regen, reason = should_request_regeneration(exception_msg, None)
     assert should_regen is False
     assert "LOGIC" in reason
 
     # Test 3: ZeroDivisionError
-    exception_msg = "execute_transform caught: division by zero of type(e)=<class 'ZeroDivisionError'>"
+    exception_msg = (
+        "execute_transform caught: division by zero of type(e)=<class 'ZeroDivisionError'>"
+    )
     should_regen, reason = should_request_regeneration(exception_msg, None)
     assert should_regen is False
     assert "LOGIC" in reason
@@ -68,13 +70,12 @@ def test_should_request_regeneration_no_error():
     assert reason == "No error"
 
 
-@patch("method1_text_prompt.call_llm")
-@patch("method1_text_prompt.execute_transform")
+@patch("arc_agi.methods.method1_text_prompt.call_llm")
+@patch("arc_agi.methods.method1_text_prompt.execute_transform")
 def test_retry_logic_structural_error(mock_execute_transform, mock_call_llm):
     """Test that structural errors trigger retry up to 3 times"""
-    from utils import RunResult
-
-    from method1_text_prompt import run_experiment
+    from arc_agi.methods.method1_text_prompt import run_experiment
+    from arc_agi.utils import RunResult
 
     # Mock LLM to always return bad code (data instead of code)
     mock_call_llm.return_value = (Mock(), "```python\n1 2 3\n4 5 6\n```")
@@ -99,11 +100,12 @@ def test_retry_logic_structural_error(mock_execute_transform, mock_call_llm):
     messages = [{"role": "user", "content": "test prompt"}]
     problems = {"train": [{"input": [[1, 2]], "output": [[3, 4]]}]}
 
-    with patch("method1_text_prompt.extract_from_code_block", return_value="1 2 3"):
+    with patch("arc_agi.methods.method1_text_prompt.extract_from_code_block", return_value="1 2 3"):
         with patch(
-            "method1_text_prompt.extract_explanation", return_value="test explanation"
+            "arc_agi.methods.method1_text_prompt.extract_explanation",
+            return_value="test explanation",
         ):
-            with patch("method1_text_prompt.record_run"):
+            with patch("arc_agi.methods.method1_text_prompt.record_run"):
                 run_experiment(
                     "test.db",
                     0,
@@ -115,21 +117,18 @@ def test_retry_logic_structural_error(mock_execute_transform, mock_call_llm):
                 )
 
     # Verify LLM was called 3 times (retry logic)
-    assert mock_call_llm.call_count == 3, (
-        f"Expected 3 LLM calls, got {mock_call_llm.call_count}"
-    )
+    assert mock_call_llm.call_count == 3, f"Expected 3 LLM calls, got {mock_call_llm.call_count}"
     assert mock_execute_transform.call_count == 3, (
         f"Expected 3 execute_transform calls, got {mock_execute_transform.call_count}"
     )
 
 
-@patch("method1_text_prompt.call_llm")
-@patch("method1_text_prompt.execute_transform")
+@patch("arc_agi.methods.method1_text_prompt.call_llm")
+@patch("arc_agi.methods.method1_text_prompt.execute_transform")
 def test_retry_logic_success_first_try(mock_execute_transform, mock_call_llm):
     """Test that successful code executes only once (no retry)"""
-    from utils import RunResult
-
-    from method1_text_prompt import run_experiment
+    from arc_agi.methods.method1_text_prompt import run_experiment
+    from arc_agi.utils import RunResult
 
     # Mock LLM to return good code
     mock_call_llm.return_value = (Mock(), "```python\ndef transform(x): return x\n```")
@@ -151,11 +150,11 @@ def test_retry_logic_success_first_try(mock_execute_transform, mock_call_llm):
     problems = {"train": [{"input": [[1, 2]], "output": [[1, 2]]}]}
 
     with patch(
-        "method1_text_prompt.extract_from_code_block",
+        "arc_agi.methods.method1_text_prompt.extract_from_code_block",
         return_value="def transform(x): return x",
     ):
-        with patch("method1_text_prompt.extract_explanation", return_value="test"):
-            with patch("method1_text_prompt.record_run"):
+        with patch("arc_agi.methods.method1_text_prompt.extract_explanation", return_value="test"):
+            with patch("arc_agi.methods.method1_text_prompt.record_run"):
                 run_experiment(
                     "test.db",
                     0,
@@ -167,9 +166,7 @@ def test_retry_logic_success_first_try(mock_execute_transform, mock_call_llm):
                 )
 
     # Verify LLM was called only once (no retry needed)
-    assert mock_call_llm.call_count == 1, (
-        f"Expected 1 LLM call, got {mock_call_llm.call_count}"
-    )
+    assert mock_call_llm.call_count == 1, f"Expected 1 LLM call, got {mock_call_llm.call_count}"
     assert mock_execute_transform.call_count == 1, (
         f"Expected 1 execute_transform call, got {mock_execute_transform.call_count}"
     )

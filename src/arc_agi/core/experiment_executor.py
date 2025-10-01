@@ -19,9 +19,9 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, TextIO, Tuple
 
-import utils
-from core.timing_tracker import TimingTracker
-from output.iteration_formatter import IterationStatusFormatter
+from arc_agi import utils
+from arc_agi.core.timing_tracker import TimingTracker
+from arc_agi.output.iteration_formatter import IterationStatusFormatter
 
 
 class ExperimentExecutor:
@@ -129,23 +129,17 @@ class ExperimentExecutor:
             iteration_duration = iteration_end_time - iteration_start_time
 
             # Show iteration timing summary
-            avg_per_iteration = (
-                iteration_duration / args.iterations if args.iterations > 0 else 0
-            )
+            avg_per_iteration = iteration_duration / args.iterations if args.iterations > 0 else 0
             print(
                 f"    ✓ Completed {args.iterations} iteration(s) in {self.format_duration(iteration_duration)}"
             )
-            print(
-                f"      (avg: {self.format_duration(avg_per_iteration)} per iteration)"
-            )
+            print(f"      (avg: {self.format_duration(avg_per_iteration)} per iteration)")
 
             individual_end_time = time.time()
             individual_duration = individual_end_time - individual_start_time
 
             # Store timing
-            self.timing.record_individual_duration(
-                template, problem, individual_duration
-            )
+            self.timing.record_individual_duration(template, problem, individual_duration)
 
             formatted_duration = self.format_duration(individual_duration)
             self.log(f"Individual test completed successfully in {formatted_duration}")
@@ -157,9 +151,7 @@ class ExperimentExecutor:
             individual_duration = individual_end_time - individual_start_time
 
             # Store timing even for failures
-            self.timing.record_individual_duration(
-                template, problem, individual_duration
-            )
+            self.timing.record_individual_duration(template, problem, individual_duration)
 
             # Record the failure
             self.failed_experiments.append(
@@ -215,9 +207,7 @@ class ExperimentExecutor:
         formatter = IterationStatusFormatter()
 
         for i, rr_train in enumerate(rr_trains, 1):
-            ran_all_train_problems_correctly = rr_train[
-                0
-            ].transform_ran_and_matched_for_all_inputs
+            ran_all_train_problems_correctly = rr_train[0].transform_ran_and_matched_for_all_inputs
             ran_at_least_one_train_problem_correctly = rr_train[
                 0
             ].transform_ran_and_matched_at_least_once
@@ -266,8 +256,6 @@ class ExperimentExecutor:
             "at_least_one_correct": at_least_one_correct,
             "all_correct_rate": all_correct_rate,
             "at_least_one_correct_rate": at_least_one_rate,
-            "individual_duration": self.timing.get_individual_duration(
-                template, problem
-            ),
+            "individual_duration": self.timing.get_individual_duration(template, problem),
             "problem_duration": self.timing.get_problem_duration(template, problem),
         }

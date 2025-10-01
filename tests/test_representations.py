@@ -1,4 +1,4 @@
-from representations import (
+from arc_agi.representations import (
     make_excel_description_of_example,
     make_grid_csv,
     make_grid_csv_english_words,

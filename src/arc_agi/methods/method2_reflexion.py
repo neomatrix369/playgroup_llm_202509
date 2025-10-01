@@ -5,16 +5,17 @@
 # Is there another way to get closer to the right solution?
 
 
+import logging
+
 # from litellm import completion
 from dotenv import load_dotenv
 from tqdm import tqdm
-import logging
 
-from db import record_run
-from litellm_helper import call_llm, check_litellm_key, disable_litellm_logging
-from prompt import get_func_dict, make_prompt
-from run_code import execute_transform, should_request_regeneration
-from utils import (
+from arc_agi.db import record_run
+from arc_agi.litellm_helper import call_llm, check_litellm_key, disable_litellm_logging
+from arc_agi.prompt import get_func_dict, make_prompt
+from arc_agi.run_code import execute_transform, should_request_regeneration
+from arc_agi.utils import (
     do_first_setup,
     do_last_report,
     extract_from_code_block,
@@ -68,21 +69,23 @@ def call_then_extract_code(model, messages, llm_responses):
     response, code_response_as_text = call_llm(model, messages)
     llm_responses.append(response)
     code_as_string = extract_from_code_block(code_response_as_text)
-    
+
     # Handle case where no code block was found (after trying multiple extraction strategies)
     if code_as_string is None:
         code_as_string = ""
-        logger.warning("No code block found in LLM response after trying multiple extraction strategies")
-        logger.debug(f"LLM response content: {code_response_as_text[:500]}...")  # Log first 500 chars for debugging
-    
+        logger.warning(
+            "No code block found in LLM response after trying multiple extraction strategies"
+        )
+        logger.debug(
+            f"LLM response content: {code_response_as_text[:500]}..."
+        )  # Log first 500 chars for debugging
+
     logger.info("After calling the LLM, we get code back")
     logger.info(code_as_string)
     return code_as_string
 
 
-def add_previous_explanations_to_messages(
-    messages_to_get_explanation, previous_explanations
-):
+def add_previous_explanations_to_messages(messages_to_get_explanation, previous_explanations):
     """Add previous incorrect explanations to the message list to guide the LLM away from repeating them."""
     explanation_prompt_pre = (
         """Previously you wrote the following explanations, each of these are WRONG. """
@@ -92,23 +95,17 @@ def add_previous_explanations_to_messages(
     logger.info(f"Previous {len(previous_explanations)} explanations:")
     for pe in previous_explanations:
         logger.info(pe)
-    messages_to_get_explanation.append(
-        make_message_part(explanation_prompt_pre, "user")
-    )
+    messages_to_get_explanation.append(make_message_part(explanation_prompt_pre, "user"))
     for previous_explanation in previous_explanations:
         messages_to_get_explanation.append(
-            make_message_part(
-                "Incorrect explanation:\n" + previous_explanation, "assistant"
-            )
+            make_message_part("Incorrect explanation:\n" + previous_explanation, "assistant")
         )
     explanation_prompt_post = (
         """Never repeat the above explanations, you must come up with something """
         """radically different. Start by explaining why this might be wrong."""
     )
     logger.info(f"Explanation prompt post: {explanation_prompt_post}")
-    messages_to_get_explanation.append(
-        make_message_part(explanation_prompt_post, "user")
-    )
+    messages_to_get_explanation.append(make_message_part(explanation_prompt_post, "user"))
 
 
 def ask_for_code_and_execute(
@@ -121,23 +118,27 @@ def ask_for_code_and_execute(
     messages_to_get_code = []
     messages_to_get_code.append(make_message_part(prompt_to_describe_problem, "user"))
     messages_to_get_code.append(make_message_part(prompt_for_explanation, "user"))
-    messages_to_get_code.append(
-        make_message_part(explanation_response_as_text, "assistant")
-    )
+    messages_to_get_code.append(make_message_part(explanation_response_as_text, "assistant"))
 
     # Retry loop for structural errors
     for retry_attempt in range(MAX_RETRY_ATTEMPTS):
         code_as_string = call_then_extract_code(model, messages_to_get_code, llm_responses)
 
         # run the code
-        rr_train, execution_outcomes, exception_message = execute_transform(code_as_string, train_problems)
+        rr_train, execution_outcomes, exception_message = execute_transform(
+            code_as_string, train_problems
+        )
 
         # Check if code regeneration is recommended
         should_regen = False
         if exception_message:
-            should_regen, regen_reason = should_request_regeneration(exception_message, code_as_string)
+            should_regen, regen_reason = should_request_regeneration(
+                exception_message, code_as_string
+            )
             if should_regen:
-                logger.warning(f"Code regeneration recommended: {regen_reason} (attempt {retry_attempt + 1}/{MAX_RETRY_ATTEMPTS})")
+                logger.warning(
+                    f"Code regeneration recommended: {regen_reason} (attempt {retry_attempt + 1}/{MAX_RETRY_ATTEMPTS})"
+                )
                 logger.debug(f"Exception: {exception_message}")
             else:
                 logger.info(f"Debugging preferred over regeneration: {regen_reason}")
@@ -180,15 +181,11 @@ def run_experiment(
     # we can force the previous explanation part for debugging
     # previous_explanations = ["""<EXPLANATION>This is a word substitution puzzle where numbers are switched around</EXPLANATION>"""]
     for reflexion_n in tqdm(range(REFLEXION_ITERATIONS), leave=False):
-        logger.info(
-            f"Reflexion iteration {reflexion_n} on experiment iteration {iteration_n}"
-        )
+        logger.info(f"Reflexion iteration {reflexion_n} on experiment iteration {iteration_n}")
         prompt_to_describe_problem = make_prompt(
             template_name, problems, target="train", func_dict=func_dict
         )
-        messages_to_get_explanation = [
-            make_message_part(prompt_to_describe_problem, "user")
-        ]
+        messages_to_get_explanation = [make_message_part(prompt_to_describe_problem, "user")]
         logger.info(f"Prompt to describe problem: {prompt_to_describe_problem}")
         # if we've iterated and failed, list the previous (incorrect) explanations
         if previous_explanations:
@@ -196,9 +193,7 @@ def run_experiment(
                 messages_to_get_explanation, previous_explanations
             )
         # Next ask for a new explanation
-        messages_to_get_explanation.append(
-            make_message_part(prompt_for_explanation, "user")
-        )
+        messages_to_get_explanation.append(make_message_part(prompt_for_explanation, "user"))
 
         explanation_response_as_text = call_for_new_explanation(
             model, messages_to_get_explanation, llm_responses
@@ -207,11 +202,13 @@ def run_experiment(
         logger.info(explanation_response_as_text)
         previous_explanations.append(explanation_response_as_text)
 
-        rr_train, code_as_string, messages_to_get_code, execution_outcomes, exception_message = ask_for_code_and_execute(
-            model,
-            prompt_to_describe_problem,
-            explanation_response_as_text,
-            llm_responses,
+        rr_train, code_as_string, messages_to_get_code, execution_outcomes, exception_message = (
+            ask_for_code_and_execute(
+                model,
+                prompt_to_describe_problem,
+                explanation_response_as_text,
+                llm_responses,
+            )
         )
 
         success = rr_train.transform_ran_and_matched_for_all_inputs
@@ -234,9 +231,7 @@ def run_experiment(
     return rr_train
 
 
-def run_experiment_for_iterations(
-    db_filename: str, model, iterations, problems, template_name
-):
+def run_experiment_for_iterations(db_filename: str, model, iterations, problems, template_name):
     """run experiment for many iterations"""
     llm_responses = []
     rr_trains = []

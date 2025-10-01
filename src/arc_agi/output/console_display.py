@@ -18,7 +18,7 @@ import argparse
 from collections import Counter
 from typing import Any, Dict, List
 
-from core.timing_tracker import TimingTracker
+from arc_agi.core.timing_tracker import TimingTracker
 
 
 class ConsoleDisplay:
@@ -106,12 +106,8 @@ class ConsoleDisplay:
             template_results: List of result dictionaries for this template
             formatted_duration: Formatted duration string
         """
-        excellent_count = len(
-            [r for r in template_results if r["all_correct_rate"] >= 0.8]
-        )
-        good_count = len(
-            [r for r in template_results if 0.5 <= r["all_correct_rate"] < 0.8]
-        )
+        excellent_count = len([r for r in template_results if r["all_correct_rate"] >= 0.8])
+        good_count = len([r for r in template_results if 0.5 <= r["all_correct_rate"] < 0.8])
         partial_count = len(
             [
                 r
@@ -119,16 +115,14 @@ class ConsoleDisplay:
                 if r["all_correct_rate"] < 0.5 and r["at_least_one_correct_rate"] >= 0.5
             ]
         )
-        poor_count = len(
-            [r for r in template_results if r["at_least_one_correct_rate"] < 0.5]
-        )
+        poor_count = len([r for r in template_results if r["at_least_one_correct_rate"] < 0.5])
 
         avg_all_correct = sum(r["all_correct_rate"] for r in template_results) / len(
             template_results
         )
-        avg_partial = sum(
-            r["at_least_one_correct_rate"] for r in template_results
-        ) / len(template_results)
+        avg_partial = sum(r["at_least_one_correct_rate"] for r in template_results) / len(
+            template_results
+        )
 
         print("\n📊 " + "─" * 60)
         print(f"📈 TEMPLATE PERFORMANCE SUMMARY: {template}")
@@ -156,9 +150,7 @@ class ConsoleDisplay:
         # Best template overall
         best_template = analysis["template_ranking"][0]
         print(f"🥇 Best Overall Template: {best_template['template']}")
-        print(
-            f"   📊 Average success: {best_template['avg_all_correct_rate']:.1%} all correct"
-        )
+        print(f"   📊 Average success: {best_template['avg_all_correct_rate']:.1%} all correct")
         print(
             f"   🎯 Excellent on {best_template['excellent_problems']}/{best_template['total_problems']} problems"
         )
@@ -183,23 +175,15 @@ class ConsoleDisplay:
             )
 
         # Problem difficulty insights
-        easy_problems = [
-            p for p in analysis["problem_analysis"] if p["difficulty"] == "EASY"
-        ]
+        easy_problems = [p for p in analysis["problem_analysis"] if p["difficulty"] == "EASY"]
         hard_problems = [
-            p
-            for p in analysis["problem_analysis"]
-            if p["difficulty"] in ["HARD", "VERY_HARD"]
+            p for p in analysis["problem_analysis"] if p["difficulty"] in ["HARD", "VERY_HARD"]
         ]
 
         if easy_problems:
-            print(
-                f"\n🟢 Easiest Problems: {', '.join([p['problem'] for p in easy_problems[:3]])}"
-            )
+            print(f"\n🟢 Easiest Problems: {', '.join([p['problem'] for p in easy_problems[:3]])}")
         if hard_problems:
-            print(
-                f"🔴 Hardest Problems: {', '.join([p['problem'] for p in hard_problems[:3]])}"
-            )
+            print(f"🔴 Hardest Problems: {', '.join([p['problem'] for p in hard_problems[:3]])}")
 
         print("=" * 75)
 
@@ -231,29 +215,17 @@ class ConsoleDisplay:
         print(f"🧮 Total tests: {total_combinations}")
 
         if results_data:
-            successful_tests = len(
-                [r for r in results_data if r["all_correct_rate"] > 0]
-            )
-            excellent_tests = len(
-                [r for r in results_data if r["all_correct_rate"] >= 0.8]
-            )
-            good_tests = len(
-                [r for r in results_data if 0.5 <= r["all_correct_rate"] < 0.8]
-            )
+            successful_tests = len([r for r in results_data if r["all_correct_rate"] > 0])
+            excellent_tests = len([r for r in results_data if r["all_correct_rate"] >= 0.8])
+            good_tests = len([r for r in results_data if 0.5 <= r["all_correct_rate"] < 0.8])
 
             print("\n📊 PERFORMANCE BREAKDOWN:")
             print("─" * 40)
             print(f"🎯 Excellent (≥80%): {excellent_tests:2d} tests")
             print(f"✅ Good (50-79%):   {good_tests:2d} tests")
-            print(
-                f"⚠️  Some success:    {successful_tests - excellent_tests - good_tests:2d} tests"
-            )
-            print(
-                f"❌ No success:      {len(results_data) - successful_tests:2d} tests"
-            )
-            print(
-                f"📈 Overall success rate: {successful_tests / len(results_data):.1%}"
-            )
+            print(f"⚠️  Some success:    {successful_tests - excellent_tests - good_tests:2d} tests")
+            print(f"❌ No success:      {len(results_data) - successful_tests:2d} tests")
+            print(f"📈 Overall success rate: {successful_tests / len(results_data):.1%}")
             print(
                 f"⚡ Average time per test: {self.format_duration(total_duration / total_combinations)}"
             )
@@ -264,12 +236,9 @@ class ConsoleDisplay:
             for template in templates_to_use:
                 template_time = self.timing.get_template_duration(template)
                 avg_per_problem = template_time / len(problems_to_use)
-                template_results = [
-                    r for r in results_data if r["template"] == template
-                ]
+                template_results = [r for r in results_data if r["template"] == template]
                 avg_success = (
-                    sum(r["all_correct_rate"] for r in template_results)
-                    / len(template_results)
+                    sum(r["all_correct_rate"] for r in template_results) / len(template_results)
                     if template_results
                     else 0
                 )
@@ -284,19 +253,13 @@ class ConsoleDisplay:
         if all_llm_responses:
             print("\n🤖 LLM USAGE STATISTICS:")
             print("─" * 30)
-            provider_counts = Counter(
-                [response.provider for response in all_llm_responses]
-            )
+            provider_counts = Counter([response.provider for response in all_llm_responses])
             for provider, count in provider_counts.items():
                 print(f"    🔗 {provider}: {count} calls")
 
-            token_usages = [
-                response.usage.total_tokens for response in all_llm_responses
-            ]
+            token_usages = [response.usage.total_tokens for response in all_llm_responses]
             print(f"    🎯 Max tokens: {max(token_usages):,}")
-            print(
-                f"    📊 Median tokens: {sorted(token_usages)[len(token_usages) // 2]:,}"
-            )
+            print(f"    📊 Median tokens: {sorted(token_usages)[len(token_usages) // 2]:,}")
             print(f"    📈 Total tokens: {sum(token_usages):,}")
 
         print("=" * 75)

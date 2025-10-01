@@ -4,13 +4,12 @@
 # BONUS can you make it write code that solves this?
 
 
-from dotenv import load_dotenv
-from tqdm import tqdm
-
 from db import record_run
+from dotenv import load_dotenv
 from litellm_helper import call_llm, check_litellm_key, disable_litellm_logging
 from prompt import get_func_dict, make_prompt
 from run_code import execute_transform
+from tqdm import tqdm
 
 # from litellm import completion
 from utils import (
@@ -63,12 +62,16 @@ def run_experiment(
     llm_responses.append(response)
     logger.info(f"Content: {content}")
     code_as_string = extract_from_code_block(content)
-    
+
     # Handle case where no code block was found (after trying multiple extraction strategies)
     if code_as_string is None:
         code_as_string = ""
-        logger.warning("No code block found in LLM response after trying multiple extraction strategies")
-        logger.debug(f"LLM response content: {content[:500]}...")  # Log first 500 chars for debugging
+        logger.warning(
+            "No code block found in LLM response after trying multiple extraction strategies"
+        )
+        logger.debug(
+            f"LLM response content: {content[:500]}..."
+        )  # Log first 500 chars for debugging
 
     train_problems = problems["train"]
     rr_train = execute_transform(code_as_string, train_problems)
@@ -85,18 +88,14 @@ def run_experiment(
     rr_trains.append(rr_train)
 
 
-def run_experiment_for_iterations(
-    db_filename: str, model, iterations, problems, template_name
-):
+def run_experiment_for_iterations(db_filename: str, model, iterations, problems, template_name):
     """method1_text_prompt's run experiment"""
     llm_responses = []
     rr_trains = []
 
     # make a prompt before calling LLM
     func_dict = get_func_dict()
-    initial_prompt = make_prompt(
-        template_name, problems, target="train", func_dict=func_dict
-    )
+    initial_prompt = make_prompt(template_name, problems, target="train", func_dict=func_dict)
     logger.info(f"Prompt: {initial_prompt}")
 
     messages = [make_message_part(initial_prompt, "user")]

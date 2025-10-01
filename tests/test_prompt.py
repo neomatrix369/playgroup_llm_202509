@@ -1,8 +1,8 @@
 import os
 
-import representations
-import utils
 from jinja2 import Environment, FileSystemLoader
+
+from arc_agi import representations, utils
 
 
 def test_baseline_template_rendering():
@@ -10,8 +10,9 @@ def test_baseline_template_rendering():
     patterns = utils.get_examples("9565186b")
     problems = patterns["train"]
 
-    # Set up Jinja2 environment
-    template_dir = os.path.join(os.path.dirname(__file__), "prompts")
+    # Set up Jinja2 environment - templates are in project root
+    project_root = os.path.dirname(os.path.dirname(__file__))
+    template_dir = os.path.join(project_root, "prompts")
     env = Environment(loader=FileSystemLoader(template_dir))
     template = env.get_template("baseline_justjson.j2")
 

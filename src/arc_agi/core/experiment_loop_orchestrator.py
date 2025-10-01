@@ -19,9 +19,9 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from core.checkpoint_manager import CheckpointManager, ExperimentCheckpoint
-from core.timing_tracker import TimingTracker
-from domain.value_objects import SuccessThresholds
+from arc_agi.core.checkpoint_manager import CheckpointManager, ExperimentCheckpoint
+from arc_agi.core.timing_tracker import TimingTracker
+from arc_agi.domain.value_objects import SuccessThresholds
 
 
 class ProgressTracker:
@@ -271,13 +271,9 @@ class ExperimentLoopOrchestrator:
         print("\n🔄 " + "=" * 70)
         print(f"📝 TEMPLATE BRANCH: {template}")
         print("=" * 75)
-        self.log_timestamp(
-            f"🌿 Starting template branch: {template} ({problem_count} problems)"
-        )
+        self.log_timestamp(f"🌿 Starting template branch: {template} ({problem_count} problems)")
 
-    def _print_test_header(
-        self, template: str, problem: str, progress: ProgressTracker
-    ) -> None:
+    def _print_test_header(self, template: str, problem: str, progress: ProgressTracker) -> None:
         """Print individual test header."""
         print(f"\n🎯 TEST [{progress.format_progress()}] " + "━" * 50)
         print(f"    📝 Template: {template}")
@@ -287,9 +283,7 @@ class ExperimentLoopOrchestrator:
             f"(Test {progress.current_test}/{progress.total_combinations})"
         )
 
-    def _print_result_feedback(
-        self, result_analysis: Dict[str, Any], is_dry_run: bool
-    ) -> None:
+    def _print_result_feedback(self, result_analysis: Dict[str, Any], is_dry_run: bool) -> None:
         """Print feedback based on result quality.
 
         Removes primitive obsession: Uses SuccessThresholds instead of magic numbers.
@@ -359,9 +353,7 @@ class ExperimentLoopOrchestrator:
 
         return True  # Continue execution
 
-    def _finalize_problem_timing(
-        self, template: str, problem: str, start_time: float
-    ) -> None:
+    def _finalize_problem_timing(self, template: str, problem: str, start_time: float) -> None:
         """Finalize timing for a completed problem."""
         end_time = time.time()
         duration = end_time - start_time
@@ -380,8 +372,7 @@ class ExperimentLoopOrchestrator:
 
         formatted = self.format_duration(duration)
         self.log_timestamp(
-            f"🏁 Template branch completed: {template} in {formatted} "
-            f"({len(problems)} problems)"
+            f"🏁 Template branch completed: {template} in {formatted} ({len(problems)} problems)"
         )
 
     def _build_result_dict(self, completed: bool) -> Dict[str, Any]:
@@ -405,9 +396,7 @@ class ExperimentLoopOrchestrator:
             "template": self.current_args.template
             if hasattr(self.current_args, "template")
             else None,
-            "problem": self.current_args.problem
-            if hasattr(self.current_args, "problem")
-            else None,
+            "problem": self.current_args.problem if hasattr(self.current_args, "problem") else None,
             "dry_run": self.current_args.dry_run,
             "verbose": self.current_args.verbose,
             "fail_fast": self.current_args.fail_fast,
@@ -465,9 +454,7 @@ class ExperimentLoopOrchestrator:
         # Log completed experiments
         if completed_count > 0:
             self.log_timestamp(f"\n✅ COMPLETED EXPERIMENTS ({completed_count}):")
-            for i, (template, problem) in enumerate(
-                checkpoint.completed_experiments, 1
-            ):
+            for i, (template, problem) in enumerate(checkpoint.completed_experiments, 1):
                 result = next(
                     (
                         r
@@ -509,7 +496,5 @@ class ExperimentLoopOrchestrator:
                 self.log_timestamp(f"   ... and {len(all_remaining) - 6} more")
 
         self.log_timestamp("=" * 70)
-        self.log_timestamp(
-            "✅ Checkpoint restored successfully - continuing experiments..."
-        )
+        self.log_timestamp("✅ Checkpoint restored successfully - continuing experiments...")
         self.log_timestamp("=" * 70 + "\n")

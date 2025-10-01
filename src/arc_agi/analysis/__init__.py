@@ -1,10 +1,10 @@
 """Analysis modules for experiment performance and difficulty."""
 
-from analysis.difficulty_classifier import DifficultyClassifier
-from analysis.experiment_aggregator import ExperimentAggregator
-from analysis.experiment_summarizer import ExperimentSummarizer
-from analysis.performance_grader import PerformanceGrader
-from analysis.statistics_aggregator import (
+from arc_agi.analysis.difficulty_classifier import DifficultyClassifier
+from arc_agi.analysis.experiment_aggregator import ExperimentAggregator
+from arc_agi.analysis.experiment_summarizer import ExperimentSummarizer
+from arc_agi.analysis.performance_grader import PerformanceGrader
+from arc_agi.analysis.statistics_aggregator import (
     BestTemplateRecommender,
     ExperimentStatisticsAggregator,
     ProblemStatisticsAggregator,

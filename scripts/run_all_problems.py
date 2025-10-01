@@ -16,10 +16,9 @@ Merges functionality from run_batch_tests.sh and run_all_problems.py:
 import argparse
 import importlib
 import traceback
-from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     import pandas as pd
@@ -29,40 +28,25 @@ except ImportError:
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     print("Warning: python-dotenv not available. Environment variables may not be loaded.")
-    load_dotenv = lambda: None
 
-import utils
+    def load_dotenv():
+        pass
+
 
 # Refactored classes to eliminate duplication
-from analysis.performance_grader import PerformanceGrader
-from analysis.difficulty_classifier import DifficultyClassifier
-from analysis.statistics_aggregator import (
-    TemplateStatisticsAggregator,
-    ProblemStatisticsAggregator,
-    ExperimentStatisticsAggregator,
-    BestTemplateRecommender
-)
-from analysis.experiment_aggregator import ExperimentAggregator
-from analysis.experiment_summarizer import ExperimentSummarizer
-from output.report_writer import ReportWriter
-from output.iteration_formatter import IterationStatusFormatter
-from output.failure_formatter import FailureSummaryFormatter
-from output.output_generator import OutputGenerator
-from output.console_display import ConsoleDisplay
-from core.timing_tracker import TimingTracker
-from core.experiment_config import ExperimentConfigResolver
-from core.experiment_executor import ExperimentExecutor
-from core.experiment_validator import ExperimentValidator
-from core.experiment_loop_orchestrator import ExperimentLoopOrchestrator
-from core.service_registry import ServiceRegistry, ServiceFactory
-from core.experiment_coordinator import ExperimentCoordinator
-from core.checkpoint_manager import CheckpointManager, ExperimentCheckpoint
+from core.checkpoint_manager import CheckpointManager
 from core.experiment_argument_parser import ExperimentArgumentParser
+from core.experiment_config import ExperimentConfigResolver
+from core.experiment_coordinator import ExperimentCoordinator
+from core.service_registry import ServiceFactory, ServiceRegistry
+from core.timing_tracker import TimingTracker
+from domain.experiment_state import ExperimentContext, ExperimentResults
 from domain.value_objects import SuccessThresholds
-from domain.experiment_state import ExperimentResults, ExperimentContext
+from output.failure_formatter import FailureSummaryFormatter
 
 
 class BatchExperimentRunner:
@@ -71,7 +55,7 @@ class BatchExperimentRunner:
     def __init__(self):
         """
         Initialize batch experiment runner.
-        
+
         Following Object Calisthenics Rule 8: Maximum 2 instance variables.
         Reduced from 14 instance variables to 6 by using cohesive objects:
         - _timing: Timing operations
@@ -87,11 +71,11 @@ class BatchExperimentRunner:
         self._context = ExperimentContext()
         self._thresholds = SuccessThresholds()
         self._checkpoint_manager: Optional[CheckpointManager] = None
-        
+
         # Service registry (consolidates 7 lazy-initialized services)
         factory = self._create_service_factory()
         self._services = ServiceRegistry(factory)
-        
+
         # Experiment coordinator (groups 8 orchestration methods)
         self._coordinator = ExperimentCoordinator(
             self._services, self._context, self.log_timestamp, self.format_duration
@@ -106,7 +90,7 @@ class BatchExperimentRunner:
 
     def log_timestamp(self, message: str, to_file_only: bool = False) -> None:
         """Log message with timestamp."""
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_msg = f"🕒 [{timestamp}] {message}"
 
         if not to_file_only:
@@ -127,9 +111,10 @@ class BatchExperimentRunner:
             return f"{minutes}m {secs}s"
         else:
             return f"{secs}s"
-    
+
     def _create_service_factory(self) -> ServiceFactory:
         """Create service factory with required dependencies."""
+
         def ranking_callback(results_data):
             # Temporarily use provided results for analysis
             original = self._results.results
@@ -137,7 +122,7 @@ class BatchExperimentRunner:
             analysis = self.generate_ranking_analysis()
             self._results.set_all_results(original)
             return analysis
-        
+
         return ServiceFactory(
             timing_tracker=self._timing,
             results_accessor=lambda: self._results.results,
@@ -149,13 +134,21 @@ class BatchExperimentRunner:
             generate_persistent_summary_callback=self.generate_persistent_summary,
             thresholds=self._thresholds,
             log_file_handle_accessor=lambda: self._context.log_handle,
-            checkpoint_manager_accessor=lambda: self._checkpoint_manager
+            checkpoint_manager_accessor=lambda: self._checkpoint_manager,
         )
 
-    def validate_prerequisites(self, templates_to_use: List[str], problems_to_use: List[str], method_module: Any, args: argparse.Namespace) -> Tuple[bool, List[str]]:
+    def validate_prerequisites(
+        self,
+        templates_to_use: List[str],
+        problems_to_use: List[str],
+        method_module: Any,
+        args: argparse.Namespace,
+    ) -> Tuple[bool, List[str]]:
         """Validate all prerequisites before starting experiments."""
         # Delegate to ExperimentValidator (Phase 2B refactoring)
-        return self._services.validator().validate_all(templates_to_use, problems_to_use, method_module, args)
+        return self._services.validator().validate_all(
+            templates_to_use, problems_to_use, method_module, args
+        )
 
     def setup_experiment_without_argparse(self, experiment_folder: Path) -> Tuple[Any, str]:
         """Setup experiment folder and database without re-parsing arguments."""
@@ -168,7 +161,7 @@ class BatchExperimentRunner:
         problem: str,
         method_module: Any,
         args: argparse.Namespace,
-        experiment_folder: Path
+        experiment_folder: Path,
     ) -> Tuple[List[Any], List[Any]]:
         """Run a single experiment with timing."""
         # Delegate to ExperimentExecutor (Phase 2A refactoring)
@@ -185,11 +178,13 @@ class BatchExperimentRunner:
         problem: str,
         rr_trains: List[Any],
         iterations: int,
-        verbose: bool = False
+        verbose: bool = False,
     ) -> Dict[str, Any]:
         """Analyze experiment results for success rates with real-time feedback."""
         # Delegate to ExperimentExecutor (Phase 2A refactoring)
-        return self._services.executor().analyze_results(template, problem, rr_trains, iterations, verbose)
+        return self._services.executor().analyze_results(
+            template, problem, rr_trains, iterations, verbose
+        )
 
     def generate_console_table(self) -> None:
         """Generate formatted console table."""
@@ -200,22 +195,22 @@ class BatchExperimentRunner:
         """Generate CSV output file with ranking data."""
         # Delegate to OutputGenerator (Phase 1 refactoring)
         return self._services.output_generator().generate_csv_output(output_dir)
-    
+
     def generate_html_output(self, output_dir: Path) -> str:
         """Generate HTML output file."""
         # Delegate to OutputGenerator (Phase 1 refactoring)
         return self._services.output_generator().generate_html_output(output_dir)
-    
+
     def generate_ranking_analysis(self) -> Dict[str, Any]:
         """Generate comprehensive ranking and best-performance analysis."""
         # Delegate to OutputGenerator (Phase 1 refactoring)
         return self._services.output_generator().generate_ranking_analysis()
-    
+
     def generate_ranking_report(self, output_dir: Path, timestamp: str) -> str:
         """Generate comprehensive ranking and analysis report."""
         # Delegate to OutputGenerator (Phase 1 refactoring)
         return self._services.output_generator().generate_ranking_report(output_dir, timestamp)
-    
+
     def discover_existing_experiments(self, base_output_dir: Path) -> List[Dict[str, Any]]:
         """Discover existing experiment result directories and load their data."""
         # Delegate to ExperimentAggregator (Phase 2C refactoring)
@@ -240,43 +235,66 @@ class BatchExperimentRunner:
 
         # Also log to file if available
         if self._context.is_logging():
-            formatter.write_file_summary(self._context.log_handle, self._results.failures, self._context.get_attempts())
+            formatter.write_file_summary(
+                self._context.log_handle, self._results.failures, self._context.get_attempts()
+            )
 
-    def generate_persistent_summary(self, base_output_dir: Path, aggregated_data: Dict[str, Any]) -> List[str]:
+    def generate_persistent_summary(
+        self, base_output_dir: Path, aggregated_data: Dict[str, Any]
+    ) -> List[str]:
         """Generate persistent summary files that aggregate all experiments."""
         # Delegate to OutputGenerator (Phase 1 refactoring)
-        return self._services.output_generator().generate_persistent_summary(base_output_dir, aggregated_data)
-    
+        return self._services.output_generator().generate_persistent_summary(
+            base_output_dir, aggregated_data
+        )
+
     def run_summarise_experiments(self, args: argparse.Namespace) -> None:
         """Analyze existing experiments and generate/update summary statistics."""
         # Delegate to ExperimentSummarizer (Phase 2D refactoring)
         self._services.summarizer().run(args)
 
-    def generate_summary_log(self, output_dir: Path, timestamp: str, total_duration: float, templates_to_use: list, problems_to_use: list, total_combinations: int) -> str:
+    def generate_summary_log(
+        self,
+        output_dir: Path,
+        timestamp: str,
+        total_duration: float,
+        templates_to_use: list,
+        problems_to_use: list,
+        total_combinations: int,
+    ) -> str:
         """Generate detailed summary log file."""
         # Delegate to OutputGenerator (Phase 1 refactoring)
-        return self._services.output_generator().generate_summary_log(output_dir, timestamp, total_duration, templates_to_use, problems_to_use, total_combinations)
-    
+        return self._services.output_generator().generate_summary_log(
+            output_dir,
+            timestamp,
+            total_duration,
+            templates_to_use,
+            problems_to_use,
+            total_combinations,
+        )
+
     def _print_experiment_configuration(
         self, args: argparse.Namespace, templates_to_use: List[str], problems_to_use: List[str]
     ) -> int:
         """Print experiment configuration. Delegates to ExperimentCoordinator."""
-        return self._coordinator.print_experiment_configuration(args, templates_to_use, problems_to_use)
+        return self._coordinator.print_experiment_configuration(
+            args, templates_to_use, problems_to_use
+        )
 
     def _setup_output_directory(self, args: argparse.Namespace) -> Tuple[Path, str]:
         """
         Setup output directory and logging. Returns (output_dir, timestamp).
 
         Following Object Calisthenics Rule 7: Small focused methods.
-        
+
         If output_dir contains a checkpoint.json, use it directly (resume mode).
         Otherwise, create a new timestamped subdirectory.
         """
         base_output_dir = Path(args.output_dir)
-        
+
         # Check if we're resuming from an existing experiment directory
         checkpoint_exists = (base_output_dir / "checkpoint.json").exists()
-        
+
         if checkpoint_exists and not args.no_resume:
             # Use the existing directory directly (resume mode)
             output_dir = base_output_dir
@@ -298,14 +316,14 @@ class BatchExperimentRunner:
 
             # Setup log file (append mode if resuming, write mode if new)
             log_file = output_dir / f"experiment_run_{timestamp}.log"
-            mode = 'a' if checkpoint_exists and not args.no_resume else 'w'
+            mode = "a" if checkpoint_exists and not args.no_resume else "w"
             log_handle = open(log_file, mode)
             self._context.set_log_handle(log_handle)
 
-            if mode == 'a':
-                log_handle.write(f"\n\n{'='*80}\n")
+            if mode == "a":
+                log_handle.write(f"\n\n{'=' * 80}\n")
                 log_handle.write(f"RESUMED: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                log_handle.write(f"{'='*80}\n\n")
+                log_handle.write(f"{'=' * 80}\n\n")
 
             self.log_timestamp(f"Logging to: {log_file}")
             print(f"📝 Detailed log: {log_file.name}")
@@ -337,23 +355,23 @@ class BatchExperimentRunner:
         templates_to_use: List[str],
         problems_to_use: List[str],
         method_module: Any,
-        args: argparse.Namespace
+        args: argparse.Namespace,
     ) -> bool:
         """
         Run pre-flight validation. Returns True if passed.
 
         Following Object Calisthenics Rule 7: Small focused methods.
         """
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print("🔍 PRE-FLIGHT VALIDATION")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         validation_passed, validation_errors = self.validate_prerequisites(
             templates_to_use, problems_to_use, method_module, args
         )
 
         if not validation_passed:
-            print(f"\n❌ Cannot proceed with experiments due to validation failures")
+            print("\n❌ Cannot proceed with experiments due to validation failures")
             if self._context.is_logging():
                 self._context.log_handle.write("\nValidation failed:\n")
                 for error in validation_errors:
@@ -361,7 +379,7 @@ class BatchExperimentRunner:
                 self._context.close_log()
             return False
 
-        print(f"{'='*80}\n")
+        print(f"{'=' * 80}\n")
         return True
 
     def _print_template_performance_summary(
@@ -389,8 +407,13 @@ class BatchExperimentRunner:
         console.print_key_insights(analysis)
 
     def _generate_and_save_outputs(
-        self, output_dir: Path, timestamp: str, total_duration: float,
-        templates_to_use: List[str], problems_to_use: List[str], total_combinations: int
+        self,
+        output_dir: Path,
+        timestamp: str,
+        total_duration: float,
+        templates_to_use: List[str],
+        problems_to_use: List[str],
+        total_combinations: int,
     ) -> None:
         """Generate and save all output files, then print file summary.
 
@@ -404,11 +427,18 @@ class BatchExperimentRunner:
         """
         csv_file = self.generate_csv_output(output_dir)
         html_file = self.generate_html_output(output_dir)
-        summary_log = self.generate_summary_log(output_dir, timestamp, total_duration, templates_to_use, problems_to_use, total_combinations)
+        summary_log = self.generate_summary_log(
+            output_dir,
+            timestamp,
+            total_duration,
+            templates_to_use,
+            problems_to_use,
+            total_combinations,
+        )
         ranking_report = self.generate_ranking_report(output_dir, timestamp)
 
-        print(f"\n💾 " + "=" * 60)
-        print(f"📁 RESULTS SAVED")
+        print("\n💾 " + "=" * 60)
+        print("📁 RESULTS SAVED")
         print("=" * 65)
         print(f"    📂 Directory: {output_dir}")
         if csv_file and csv_file != "":
@@ -424,8 +454,11 @@ class BatchExperimentRunner:
         print("=" * 65)
 
     def _print_final_summary(
-        self, total_duration: float, total_combinations: int,
-        templates_to_use: List[str], problems_to_use: List[str]
+        self,
+        total_duration: float,
+        total_combinations: int,
+        templates_to_use: List[str],
+        problems_to_use: List[str],
     ) -> None:
         """Print final experiment summary including performance breakdown and LLM statistics.
 
@@ -438,8 +471,12 @@ class BatchExperimentRunner:
         # Delegate to ConsoleDisplay (Phase 1 refactoring)
         console = self._services.console_display()
         console.print_final_summary(
-            total_duration, total_combinations, templates_to_use, problems_to_use,
-            self._results.results, self._results.llm_responses
+            total_duration,
+            total_combinations,
+            templates_to_use,
+            problems_to_use,
+            self._results.results,
+            self._results.llm_responses,
         )
         self.log_timestamp("🎉 EXPERIMENT COMPLETED! 🎉")
 
@@ -460,7 +497,9 @@ class BatchExperimentRunner:
         problems_to_use = ExperimentConfigResolver.resolve_problems(args.problems)
 
         # Display configuration (extracted method)
-        total_combinations = self._print_experiment_configuration(args, templates_to_use, problems_to_use)
+        total_combinations = self._print_experiment_configuration(
+            args, templates_to_use, problems_to_use
+        )
 
         # Setup output directory and logging (extracted method)
         output_dir, timestamp = self._setup_output_directory(args)
@@ -468,14 +507,16 @@ class BatchExperimentRunner:
         # Setup checkpoint manager (unless disabled)
         if not args.no_checkpoint:
             self._checkpoint_manager = CheckpointManager(output_dir)
-            
+
             # Handle checkpoint resume logic
             if not args.no_resume:
                 checkpoint = self._checkpoint_manager.load_checkpoint()
                 if checkpoint:
                     # Auto-prompt or force-resume based on flags
-                    should_resume = args.resume or CheckpointManager.prompt_resume_from_checkpoint(checkpoint)
-                    
+                    should_resume = args.resume or CheckpointManager.prompt_resume_from_checkpoint(
+                        checkpoint
+                    )
+
                     if should_resume:
                         self.log_timestamp("✅ Resuming from previous checkpoint")
                         # Note: The actual restore happens in the orchestrator's execute_loop
@@ -489,7 +530,9 @@ class BatchExperimentRunner:
             return
 
         # Run pre-flight validation (extracted method)
-        if not self._run_preflight_validation(templates_to_use, problems_to_use, method_module, args):
+        if not self._run_preflight_validation(
+            templates_to_use, problems_to_use, method_module, args
+        ):
             return
 
         # Execute experiments using orchestrator (removes 100+ lines of procedural code)
@@ -497,25 +540,27 @@ class BatchExperimentRunner:
         loop_result = orchestrator.execute_loop(
             templates_to_use, problems_to_use, method_module, args, output_dir
         )
-        
+
         # Collect results from orchestrator
-        self._results.set_all_results(loop_result['results_data'])
-        self._results.set_all_llm_responses(loop_result['all_llm_responses'])
-        self._results.set_all_failures(loop_result['failed_experiments'])
-        
+        self._results.set_all_results(loop_result["results_data"])
+        self._results.set_all_llm_responses(loop_result["all_llm_responses"])
+        self._results.set_all_failures(loop_result["failed_experiments"])
+
         # If loop stopped early due to fail-fast, handle it
-        if not loop_result['completed']:
+        if not loop_result["completed"]:
             self._generate_failure_summary()
             return
-        
+
         # Print template performance summaries
         if not args.dry_run:
             for template in templates_to_use:
-                template_results = [r for r in self._results.results if r['template'] == template]
+                template_results = [r for r in self._results.results if r["template"] == template]
                 if template_results:
                     template_duration = self._timing.get_template_duration(template)
                     formatted_duration = self.format_duration(template_duration)
-                    self._print_template_performance_summary(template, template_results, formatted_duration)
+                    self._print_template_performance_summary(
+                        template, template_results, formatted_duration
+                    )
 
         # Record global end time
         self._timing.end_global()
@@ -532,10 +577,19 @@ class BatchExperimentRunner:
             if analysis:
                 self._print_key_insights(analysis)
 
-            self._generate_and_save_outputs(output_dir, timestamp, total_duration, templates_to_use, problems_to_use, total_combinations)
+            self._generate_and_save_outputs(
+                output_dir,
+                timestamp,
+                total_duration,
+                templates_to_use,
+                problems_to_use,
+                total_combinations,
+            )
 
         # Final summary
-        self._print_final_summary(total_duration, total_combinations, templates_to_use, problems_to_use)
+        self._print_final_summary(
+            total_duration, total_combinations, templates_to_use, problems_to_use
+        )
 
         # Generate failure summary if there were any failures
         if self._results.failures:
@@ -543,9 +597,9 @@ class BatchExperimentRunner:
 
         # Close log file
         if self._context.is_logging():
-            self._context.log_handle.write(f"\n{'='*80}\n")
+            self._context.log_handle.write(f"\n{'=' * 80}\n")
             self._context.log_handle.write("EXPERIMENT COMPLETED\n")
-            self._context.log_handle.write(f"{'='*80}\n")
+            self._context.log_handle.write(f"{'=' * 80}\n")
             self._context.close_log()
 
 
