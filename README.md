@@ -208,3 +208,60 @@ MIT License - see repository for details.
 2. 🔧 Check [CLI Reference](docs/CLI_REFERENCE.md) for all command options
 3. 🚀 Explore [Batch Runner Guide](docs/BATCH_RUNNER.md) for systematic testing
 4. ⚙️ See [Development Guide](docs/DEVELOPMENT.md) to contribute
+
+---
+
+## Developer Quick Reference
+
+Quick commands for development workflow. See [Development Guide](docs/DEVELOPMENT.md) for comprehensive setup.
+
+### Environment Setup (Ian's Workflow)
+
+```bash
+# Using conda base environment
+conda activate basepython312
+cd /home/ian/workspace/personal/playgroup/playgroup_llm_202509
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
+```
+
+### Pre-commit Hooks
+
+```bash
+# Install and configure pre-commit
+pip install pre-commit
+pre-commit install
+pre-commit install --hook-type pre-commit
+
+# Pre-commit runs: isort, ruff, ruff-format, pytest
+```
+
+### File Monitoring and Auto-Testing
+
+```bash
+# Install fswatch (cross-platform file monitoring)
+# macOS: brew install fswatch
+# Linux: sudo apt install fswatch
+
+# Watch for file changes (simple output)
+fswatch --event Created --event Updated --event Removed -x ./*.py | \
+  while read file event; do
+    echo "$(date '+%Y-%m-%d %H:%M:%S')  $file  $event"
+  done
+
+# Auto-run pytest on any file change
+fswatch -r -x *.py | while read file event; do
+    clear
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Change detected in $file ($event)"
+    pytest
+    sleep 1
+done
+```
+
+**See [Development Guide](docs/DEVELOPMENT.md) for:**
+- Complete environment setup instructions
+- Testing workflows and coverage reports
+- Code style guidelines
+- Contributing process
