@@ -9,32 +9,77 @@ License - MIT.
 
 # Setup
 
-```
-# I'm assuming you havea  Python 3.12 environment setup already
+```bash
+# I'm assuming you have a Python 3.12 environment setup already
 # you'll see further below in 'Ian's notes' I use conda to make a plain 3.12 env, then I make this venv (on my linux machine)
 python -m venv .venv
 . .venv/bin/activate # activate local env
 pip install -r requirements.txt
 
-# now you _should_ be able to run pytest and prompt.py
+# Install the project as an editable package (required after reorganization)
+pip install -e .
+
+# Now you should be able to run pytest and the main scripts
 pytest
-python prompt.py --help # just check it runs
-python run_code.py --help # just check it runs
+python src/arc_agi/prompt.py --help # check it runs
+python src/arc_agi/run_code.py --help # check it runs
 ```
+
+## Project Structure
+
+The project follows Python best practices with a src/ layout:
+
+```
+playgroup_llm_202509/
+├── src/arc_agi/              # Main package (installed via pip install -e .)
+│   ├── __init__.py
+│   ├── methods/              # Experiment methods
+│   │   ├── method1_text_prompt.py    # Single-pass LLM prompt method
+│   │   ├── method2_reflexion.py      # Multi-iteration reflexion method
+│   │   └── variants/                 # Method variants
+│   ├── analysis/             # Result analysis and statistics
+│   ├── core/                 # Core orchestration and coordination
+│   ├── domain/               # Domain models and value objects
+│   ├── output/               # Output formatting and display
+│   ├── db.py                 # SQLite database operations
+│   ├── litellm_helper.py     # LLM API integration
+│   ├── prompt.py             # Prompt generation and rendering
+│   ├── representations.py    # Grid representation formats
+│   ├── run_code.py           # Code execution and validation
+│   └── utils.py              # Common utilities
+├── scripts/                  # Executable scripts
+│   ├── run_all_problems.py   # Batch experiment runner
+│   ├── analysis.py           # Analysis utilities
+│   └── create_retroactive_checkpoint.py
+├── tests/                    # All test files
+│   ├── test_run_code.py
+│   ├── test_retry_logic.py
+│   ├── test_utils.py
+│   └── ...
+├── prompts/                  # Jinja2 prompt templates
+├── arc_data/                 # ARC-AGI dataset
+├── pyproject.toml            # Package configuration and tool settings
+└── requirements.txt          # Python dependencies
+```
+
+**Key Points:**
+- The project is installed as a package via `pip install -e .`
+- Import using `from arc_agi import module` or `from arc_agi.methods import method1_text_prompt`
+- Scripts are in `scripts/`, modules in `src/arc_agi/`, tests in `tests/`
+- Tool configurations (isort, ruff, pytest) are in `pyproject.toml`
 
 # Walkthrough (during playgroup)
 
+```bash
+# Visit https://arcprize.org/play?task=0d3d703e
+python src/arc_agi/prompt.py -t baseline_justjson.j2 -p 0d3d703e # render this problem as a prompt
+python src/arc_agi/prompt.py -t baseline_wquotedgridcsv_excel.j2 -p 0d3d703e # render with different template
 ```
-# visit https://arcprize.org/play?task=0d3d703e
-python prompt.py -t baseline_justjson.j2 -p 0d3d703e # render this problem as a prompt
-python prompt.py -t baseline_wquotedgridcsv_excel.j2 -p 0d3d703e # render this problem as a prompt
 
-```
-
-```
-python run_code.py --help
-python run_code.py -p 0d3d703e -c example_solutions/ex_soln_0d3d703e.py # run good solution on the right problem
-python run_code.py -p 0d3d703e -c example_solutions/ex_soln_08ed6ac7.py # run the wrong solution on a different problem
+```bash
+python src/arc_agi/run_code.py --help
+python src/arc_agi/run_code.py -p 0d3d703e -c example_solutions/ex_soln_0d3d703e.py # run good solution
+python src/arc_agi/run_code.py -p 0d3d703e -c example_solutions/ex_soln_08ed6ac7.py # run wrong solution on different problem
 ```
 
 The `run_code.execute_transform` module builds a `utils.RunResult` result, this tracks if and how many of the example `initial` problems were transformed correctly to the desired `final` states. It also generates an `ExecutionOutcome` object which tracks how each initial grid is transformed, by the code.
@@ -50,18 +95,21 @@ The `run_code.execute_transform` module builds a `utils.RunResult` result, this 
 
 ### run method1 with the default prompt on an easy problem for 5 iterations
 
-```
+```bash
 # run the basic method with the default prompt for 5 iterations
-python method1_text_prompt.py --help # see the arg description
-python method1_text_prompt.py -p 0d3d703e -i 5  # maybe 2-3 minutes and 20% correctness?
-# this is equivalent to the fully formed version which selects the prompt and model to run
-# python method1_text_prompt.py -p 0d3d703e -t baseline_justjson.j2 -m openrouter/deepseek/deepseek-chat-v3-0324 -i 5
-# you could try looking at experiment.log logfile (detailed at the top of stdout when you run method1)
-# you could try opening sqlite3 (if installed), detailed under the logfile line
+python src/arc_agi/methods/method1_text_prompt.py --help # see the arg description
+python src/arc_agi/methods/method1_text_prompt.py -p 0d3d703e -i 5  # maybe 2-3 minutes and 20% correctness?
+
+# This is equivalent to the fully formed version which selects the prompt and model to run:
+# python src/arc_agi/methods/method1_text_prompt.py -p 0d3d703e -t baseline_justjson.j2 -m openrouter/deepseek/deepseek-chat-v3-0324 -i 5
+
+# You can examine the experiment.log logfile (path detailed at the top of stdout)
+# You can also open the SQLite database (path shown in stdout):
+sqlite3 experiments/exp_TIMESTAMP/experiments.db
 sqlite3> .schema
 sqlite3> select code from experiments where all_train_transformed_correctly=true;
 sqlite3> select final_explanation from experiments where all_train_transformed_correctly=false;
-Note if it got an explanation right, but wrote bad code (e.g. with a SyntaxError), then it won't transform correctly
+# Note: if it got an explanation right, but wrote bad code (e.g. with a SyntaxError), then it won't transform correctly
 
 # In method1's run_experiment function we receive an object after trying a proposed solution
 # execute_transform() returns a tuple of (RunResult, ExecutionOutcomes, exception_message)
@@ -86,7 +134,7 @@ Note if it got an explanation right, but wrote bad code (e.g. with a SyntaxError
 
 ## Batch Experiment Runner
 
-The `run_all_problems.py` script provides a comprehensive batch experiment runner for systematic ARC-AGI testing across multiple templates and problems.
+The `scripts/run_all_problems.py` script provides a comprehensive batch experiment runner for systematic ARC-AGI testing across multiple templates and problems.
 
 ### Features
 
@@ -102,19 +150,19 @@ The `run_all_problems.py` script provides a comprehensive batch experiment runne
 
 ```bash
 # Run all templates and problems (comprehensive test)
-python run_all_problems.py
+python scripts/run_all_problems.py
 
 # Run specific templates and problems with multiple iterations
-python run_all_problems.py -t "baseline_justjson_enhanced.j2,reflexion_enhanced.j2" -p "0d3d703e,08ed6ac7" -i 5
+python scripts/run_all_problems.py -t "baseline_justjson_enhanced.j2,reflexion_enhanced.j2" -p "0d3d703e,08ed6ac7" -i 5
 
 # Test with different method module and model
-python run_all_problems.py --method method2_reflexion --model openrouter/deepseek/deepseek-chat-v3-0324
+python scripts/run_all_problems.py --method method2_reflexion --model openrouter/deepseek/deepseek-chat-v3-0324
 
 # Dry run to preview what would be executed
-python run_all_problems.py --dry-run --verbose
+python scripts/run_all_problems.py --dry-run --verbose
 
 # Quick test of a single template-problem combination
-python run_all_problems.py -t "baseline_justjson_enhanced.j2" -p "0d3d703e" -i 1
+python scripts/run_all_problems.py -t "baseline_justjson_enhanced.j2" -p "0d3d703e" -i 1
 ```
 
 ### Output Structure
@@ -132,6 +180,20 @@ Results are saved in timestamped directories under `batch_results/` containing:
 - ❌ **Poor (<50%)**: Grade F, needs improvement
 
 ### Recent Improvements
+
+#### Project Reorganization (2025-10)
+- **Python Package Structure**: Reorganized project following Python best practices
+  - Created `src/arc_agi/` package structure with proper `__init__.py` files
+  - Moved all modules to `src/arc_agi/` (methods, core, domain, analysis, output)
+  - Moved executable scripts to `scripts/` directory
+  - Moved all tests to `tests/` directory
+  - Added `pyproject.toml` for package configuration (PEP 517/518 compliant)
+  - Configured isort with `known_first_party = ["arc_agi"]` to preserve package imports
+  - Configured ruff and pytest in `pyproject.toml`
+  - Installed as editable package: `pip install -e .`
+  - Updated all imports to use `from arc_agi import module` pattern
+  - Fixed template paths in tests to use project root
+  - **All 50 tests passing** after reorganization
 
 #### Code Quality and Architecture (2025-09)
 - **Object Calisthenics Refactoring**: Extracted 16+ classes following SOLID principles for better maintainability
@@ -172,18 +234,18 @@ How much further could we go?
 
 ### run method2 on a harder problem, observe the logs
 
-```
-%run method2_reflexion.py -t reflexion_wquotedgridcsv_excel.j2 -p 9565186b -i 20
-now open the logs and follow them - watch the growing set of (5) explanations and more-complex code solutions
-is this a good direction?
+```bash
+python src/arc_agi/methods/method2_reflexion.py -t reflexion_wquotedgridcsv_excel.j2 -p 9565186b -i 20
+# Now open the logs and follow them - watch the growing set of (5) explanations and more-complex code solutions
+# Is this a good direction?
 ```
 
 ### hinting - use method1 again on a copy of a prompt
 
-```
-in prompts/ copy e.g. baseline_wquotedgridcsv_excel.j2 (a good one)
-we'll discuss what we could add...
-python method1_text_prompt.py -p 9565186b -t your_hinted_prompt.j2 -i 3
+```bash
+# In prompts/ copy e.g. baseline_wquotedgridcsv_excel.j2 (a good one)
+# We'll discuss what we could add...
+python src/arc_agi/methods/method1_text_prompt.py -p 9565186b -t your_hinted_prompt.j2 -i 3
 ```
 
 ### thoughts
