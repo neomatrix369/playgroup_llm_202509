@@ -137,7 +137,7 @@ class ExperimentValidator:
         """Validate that method module has required functions.
 
         Args:
-            method_module: Method module to validate
+            method_module: Method module to validate (can be None in dry-run mode)
 
         Returns:
             List of error messages (empty if all valid)
@@ -145,6 +145,11 @@ class ExperimentValidator:
         errors = []
 
         print("  ✓ Checking method module...")
+
+        # Skip validation if method_module is None (e.g., in dry-run mode)
+        if method_module is None:
+            print("    ⚠ Method module validation skipped (dry-run mode)")
+            return errors
 
         if not hasattr(method_module, "run_experiment_for_iterations"):
             errors.append("Method module missing 'run_experiment_for_iterations' function")

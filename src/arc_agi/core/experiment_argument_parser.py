@@ -30,7 +30,7 @@ Examples:
   python run_all_problems.py --dry-run --verbose
 
   # Use different method module
-  python run_all_problems.py --method method2_reflexion --model openrouter/deepseek/deepseek-chat-v3-0324
+  python run_all_problems.py --method arc_agi.methods.method2_reflexion --model openrouter/deepseek/deepseek-chat-v3-0324
 
   # Analyze existing experiments and generate summary statistics
   python run_all_problems.py --summarise-experiments --verbose
@@ -45,7 +45,7 @@ Examples:
             "-m",
             "--method",
             type=str,
-            default="method1_text_prompt",
+            default="arc_agi.methods.method1_text_prompt",
             help="Method module to use (default: %(default)s)",
         )
         parser.add_argument(
@@ -90,9 +90,7 @@ Examples:
             action="store_true",
             help="Show what would be run without executing",
         )
-        parser.add_argument(
-            "-v", "--verbose", action="store_true", help="Verbose output"
-        )
+        parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
         parser.add_argument(
             "--summarise-experiments",
             action="store_true",
