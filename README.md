@@ -154,6 +154,52 @@ open htmlcov/index.html
 
 **50 tests** covering core functionality, retry logic, representations, and more.
 
+## Exploring Further
+
+Now compare this to the EXPT (experiments) results - better prompt engineering gets us further. **How much further could we go?**
+
+### Try Method2 Reflexion on Harder Problems
+
+```bash
+# Run reflexion method - watch explanations grow and code evolve
+python src/arc_agi/methods/method2_reflexion.py -p 9565186b -t reflexion_wquotedgridcsv_excel.j2 -i 20
+
+# Open logs and follow the growing set of explanations
+tail -f experiments/exp_*/experiment.log | grep -A 5 "EXPLANATION"
+```
+
+See [Walkthrough Part 4](docs/WALKTHROUGH.md#part-4-multi-iteration-reflexion-method-method2) for detailed explanation.
+
+### Experiment with Prompt Hinting
+
+```bash
+# Copy a good baseline template
+cp prompts/baseline_wquotedgridcsv_excel.j2 prompts/my_enhanced_template.j2
+
+# Edit to add hints, structure, or different instructions
+# Test your enhanced prompt
+python src/arc_agi/methods/method1_text_prompt.py -p 9565186b -t my_enhanced_template.j2 -i 3
+```
+
+See [Walkthrough Part 6](docs/WALKTHROUGH.md#part-6-prompt-engineering) for prompt engineering guide.
+
+### Discussion Questions
+
+**Representation Optimization:**
+- Is the baseline representation suboptimal? How could it be improved?
+- Look in `src/arc_agi/representations.py` - what could we add?
+- Should we include grid size? Would scipy's connected components help or mislead?
+
+**Prompt Architecture:**
+- Is a 1-pass prompt optimal? Should it be split into discrete chunks?
+- Break into: analysis phase → pattern identification → code generation?
+
+**Methodology:**
+- Is reflexion better than fresh attempts? When does context become noise?
+- How many iterations needed for statistical significance?
+
+See [Discussion Questions](docs/WALKTHROUGH.md#discussion-questions) for complete list.
+
 ## Development
 
 See [Development Guide](docs/DEVELOPMENT.md) for:
