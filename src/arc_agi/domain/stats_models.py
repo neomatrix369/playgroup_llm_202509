@@ -47,9 +47,7 @@ class TemplateStats:
         """Calculate average at-least-one-correct rate."""
         if not self.results:
             return 0.0
-        return sum(r["at_least_one_correct_rate"] for r in self.results) / len(
-            self.results
-        )
+        return sum(r["at_least_one_correct_rate"] for r in self.results) / len(self.results)
 
     def average_duration(self) -> float:
         """Calculate average duration per problem."""
@@ -64,16 +62,10 @@ class TemplateStats:
     def good_count(self, min_threshold: float = 0.5, max_threshold: float = 0.8) -> int:
         """Count problems with good performance (50-79%)."""
         return len(
-            [
-                r
-                for r in self.results
-                if min_threshold <= r["all_correct_rate"] < max_threshold
-            ]
+            [r for r in self.results if min_threshold <= r["all_correct_rate"] < max_threshold]
         )
 
-    def weighted_score(
-        self, all_correct_weight: float = 0.8, partial_weight: float = 0.2
-    ) -> float:
+    def weighted_score(self, all_correct_weight: float = 0.8, partial_weight: float = 0.2) -> float:
         """Calculate weighted performance score."""
         return (
             self.average_all_correct_rate() * all_correct_weight
@@ -101,6 +93,7 @@ class TemplateStats:
             "max_success_rate": self.max_success_rate(),
             "total_runs": self.total_runs,
             "experiments": self.experiments,
+            "success_rates": self.success_rates,  # Include for consistency calculations
         }
 
 
@@ -137,9 +130,7 @@ class ProblemStats:
         """Calculate average at-least-one-correct rate."""
         if not self.results:
             return 0.0
-        return sum(r["at_least_one_correct_rate"] for r in self.results) / len(
-            self.results
-        )
+        return sum(r["at_least_one_correct_rate"] for r in self.results) / len(self.results)
 
     def best_template_result(self) -> Optional[Dict[str, Any]]:
         """Find the best performing template for this problem."""

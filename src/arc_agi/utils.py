@@ -12,8 +12,13 @@ import numpy as np
 
 from arc_agi.db import make_db
 
-sys.path.insert(0, "scripts")
-import analysis
+# Add scripts directory to path (handle both running from project root and from scripts/)
+_current_file = os.path.abspath(__file__)
+_project_root = os.path.dirname(os.path.dirname(os.path.dirname(_current_file)))
+_scripts_dir = os.path.join(_project_root, "scripts")
+if _scripts_dir not in sys.path:
+    sys.path.insert(0, _scripts_dir)
+import analysis  # noqa: E402
 
 
 def setup_logging(experiment_folder):
