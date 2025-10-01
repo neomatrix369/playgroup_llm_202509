@@ -4,21 +4,19 @@
 # BONUS can you make it write code that solves this?
 
 
-from db import record_run
-from dotenv import load_dotenv
-from litellm_helper import call_llm, check_litellm_key, disable_litellm_logging
-from prompt import get_func_dict, make_prompt
-from run_code import execute_transform
-from tqdm import tqdm
-
-# from litellm import completion
-from utils import (
+from arc_agi.db import record_run
+from arc_agi.litellm_helper import call_llm, check_litellm_key, disable_litellm_logging
+from arc_agi.prompt import get_func_dict, make_prompt
+from arc_agi.run_code import execute_transform
+from arc_agi.utils import (
     do_first_setup,
     do_last_report,
     extract_explanation,
     extract_from_code_block,
     make_message_part,
 )
+from dotenv import load_dotenv
+from tqdm import tqdm
 
 disable_litellm_logging()
 
